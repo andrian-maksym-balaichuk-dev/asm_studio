@@ -44,6 +44,12 @@ add_library(asm_studio_lib STATIC
     ${ASM_SRC_DIR}/api/Program.cpp
     ${ASM_SRC_DIR}/api/Function.cpp
     ${ASM_SRC_DIR}/api/Variable.cpp
+    ${ASM_SRC_DIR}/lowering/Lowering.cpp
+    ${ASM_SRC_DIR}/backend/PseudoEmitter.cpp
+    ${ASM_SRC_DIR}/simulator/Simulator.cpp
+    ${ASM_SRC_DIR}/optimizer/Optimizer.cpp
+    ${ASM_SRC_DIR}/visualization/CfgDot.cpp
+    ${ASM_SRC_DIR}/explain/Explain.cpp
 )
 add_library(asm::studio ALIAS asm_studio_lib)
 
@@ -121,13 +127,27 @@ if(ASM_BUILD_TESTS AND BUILD_TESTING)
         set(ASM_TEST_TARGETS "${ASM_TEST_TARGETS}" PARENT_SCOPE)
     endfunction()
 
-    asm_add_test_executable(asm_core_tests  ${ASM_TEST_DIR}/core/DiagnosticTest.cpp)
-    asm_add_test_executable(asm_api_tests   ${ASM_TEST_DIR}/api/ProgramApiTest.cpp)
+    asm_add_test_executable(asm_core_tests      ${ASM_TEST_DIR}/core/DiagnosticTest.cpp)
+    asm_add_test_executable(asm_api_tests       ${ASM_TEST_DIR}/api/ProgramApiTest.cpp)
+    asm_add_test_executable(asm_condition_tests ${ASM_TEST_DIR}/api/ConditionTest.cpp)
+    asm_add_test_executable(asm_expr_stmt_tests ${ASM_TEST_DIR}/api/ExprStmtTest.cpp)
+    asm_add_test_executable(asm_ir_tests        ${ASM_TEST_DIR}/ir/IRTest.cpp)
+    asm_add_test_executable(asm_lexer_tests     ${ASM_TEST_DIR}/parser/LexerTest.cpp)
+    asm_add_test_executable(asm_parser_tests    ${ASM_TEST_DIR}/parser/ParserTest.cpp)
+    asm_add_test_executable(asm_sim_tests       ${ASM_TEST_DIR}/simulator/SimulatorTest.cpp)
+    asm_add_test_executable(asm_opt_tests       ${ASM_TEST_DIR}/optimizer/OptimizerTest.cpp)
 
     # Aggregate binary: all test sources compiled together.
     add_executable(asm_all_tests
         ${ASM_TEST_DIR}/core/DiagnosticTest.cpp
         ${ASM_TEST_DIR}/api/ProgramApiTest.cpp
+        ${ASM_TEST_DIR}/api/ConditionTest.cpp
+        ${ASM_TEST_DIR}/api/ExprStmtTest.cpp
+        ${ASM_TEST_DIR}/ir/IRTest.cpp
+        ${ASM_TEST_DIR}/parser/LexerTest.cpp
+        ${ASM_TEST_DIR}/parser/ParserTest.cpp
+        ${ASM_TEST_DIR}/simulator/SimulatorTest.cpp
+        ${ASM_TEST_DIR}/optimizer/OptimizerTest.cpp
     )
     target_link_libraries(asm_all_tests PRIVATE asm::studio GTest::gtest_main)
     target_compile_features(asm_all_tests PRIVATE cxx_std_23)

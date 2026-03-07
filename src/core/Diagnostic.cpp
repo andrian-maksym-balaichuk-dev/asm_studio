@@ -4,53 +4,62 @@
 #include <string_view>
 #include <utility>
 
-namespace asmstudio {
-
-namespace {
-
+namespace asmstudio
+{
+namespace
+{
 constexpr std::string_view severityLabel(Severity s) noexcept
 {
-    switch(s)
+    switch (s)
     {
-        case Severity::Note:    return "note";
-        case Severity::Warning: return "warning";
-        case Severity::Error:   return "error";
-        case Severity::Fatal:   return "fatal";
+    case Severity::Note: return "note";
+    case Severity::Warning: return "warning";
+    case Severity::Error: return "error";
+    case Severity::Fatal: return "fatal";
     }
     return "unknown";
 }
-
 } // namespace
 
 void DiagnosticBag::emit(Severity severity, std::string message, SourceRange range)
 {
-    diags_.push_back({severity, std::move(message), range});
+    m_diagnostic.push_back({ severity, std::move(message), range });
 }
 
 bool DiagnosticBag::hasErrors() const noexcept
 {
-    return std::ranges::any_of(diags_, [](const Diagnostic& d) {
+    return std::ranges::any_of(m_diagnostic, [](const Diagnostic& d) {
         return d.severity == Severity::Error || d.severity == Severity::Fatal;
     });
 }
 
-bool DiagnosticBag::empty() const noexcept { return diags_.empty(); }
+bool DiagnosticBag::empty() const noexcept
+{
+    return m_diagnostic.empty();
+}
 
-std::span<const Diagnostic> DiagnosticBag::all() const noexcept { return diags_; }
+std::span<const Diagnostic> DiagnosticBag::all() const noexcept
+{
+    return m_diagnostic;
+}
 
 void DiagnosticBag::print(std::ostream& out) const
 {
-    for(const auto& d : diags_)
+    for (const auto& [severity, message, range] : m_diagnostic)
     {
-        out << severityLabel(d.severity);
-        if(d.range.line != 0)
+        out << severityLabel(severity);
+
+        if (range.line != 0)
         {
-            out << ':' << d.range.line << ':' << d.range.col;
+            out << ':' << range.line << ':' << range.col;
         }
-        out << ": " << d.message << '\n';
+
+        out << ": " << message << '\n';
     }
 }
 
-void DiagnosticBag::clear() noexcept { diags_.clear(); }
-
+void DiagnosticBag::clear() noexcept
+{
+    m_diagnostic.clear();
+}
 } // namespace asmstudio

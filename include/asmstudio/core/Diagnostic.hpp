@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ASMSTUDIO_CORE_DIAGNOSTIC_HPP
+#define ASMSTUDIO_CORE_DIAGNOSTIC_HPP
 
 #include <asmstudio/core/SourceLocation.hpp>
 
@@ -7,8 +8,8 @@
 #include <string>
 #include <vector>
 
-namespace asmstudio {
-
+namespace asmstudio
+{
 enum class Severity
 {
     Note,
@@ -19,7 +20,7 @@ enum class Severity
 
 struct Diagnostic
 {
-    Severity    severity;
+    Severity severity;
     std::string message;
     SourceRange range;
 };
@@ -37,7 +38,9 @@ public:
     void clear() noexcept;
 
 private:
-    std::vector<Diagnostic> diags_;
+    std::vector<Diagnostic> m_diagnostic;
 };
-
 } // namespace asmstudio
+
+
+#endif // ASMSTUDIO_CORE_DIAGNOSTIC_HPP

@@ -78,7 +78,7 @@ TEST(DiagnosticBag, PrintOutputContainsMessage)
 TEST(DiagnosticBag, PrintIncludesLineColWhenSet)
 {
     DiagnosticBag bag;
-    bag.emit(Severity::Warning, "missing newline", SourceRange{.line = 10, .col = 5, .length = 1});
+    bag.emit(Severity::Warning, "missing newline", SourceRange{ .line = 10, .col = 5, .length = 1 });
     std::ostringstream oss;
     bag.print(oss);
     EXPECT_NE(oss.str().find("10"), std::string::npos);

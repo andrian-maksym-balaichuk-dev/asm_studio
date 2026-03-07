@@ -1,20 +1,28 @@
+#include <asmstudio/api/Condition.hpp>
 #include <asmstudio/api/Variable.hpp>
 
-#include <utility>
 
-namespace asmstudio {
-
-Variable::Variable(std::string name, DataType type, int64_t init)
-    : name_(std::move(name))
-    , type_(type)
-    , init_(init)
+namespace asmstudio
 {
+Variable::Variable(std::string name, const DataType type, const InitValue init)
+: m_name(std::move(name)), m_type(type), m_init(init)
+{}
+
+std::string_view Variable::name() const noexcept
+{
+    return m_name;
+}
+DataType Variable::type() const noexcept
+{
+    return m_type;
+}
+const InitValue& Variable::initVariant() const noexcept
+{
+    return m_init;
 }
 
-std::string_view Variable::name() const noexcept { return name_; }
-
-DataType Variable::type() const noexcept { return type_; }
-
-int64_t Variable::initialValue() const noexcept { return init_; }
-
+Condition Variable::compare(const CmpKind kind, const Operand rhs) const
+{
+    return Condition{ std::cref(*this), kind, rhs };
+}
 } // namespace asmstudio

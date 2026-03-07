@@ -1,4 +1,5 @@
 #include <asmstudio/api/Program.hpp>
+#include <asmstudio/api/Variable.hpp>
 
 #include <gtest/gtest.h>
 
@@ -60,7 +61,7 @@ TEST(Function, CreateIntVariable)
     Function fn("fn");
     Variable& v = fn.createInt("counter", 42);
     EXPECT_EQ(v.name(), "counter");
-    EXPECT_EQ(v.initialValue(), 42);
+    EXPECT_EQ(std::get<int64_t>(v.initVariant()), 42);
     EXPECT_EQ(v.type(), DataType::Int32);
     EXPECT_EQ(fn.variables().size(), 1u);
 }
@@ -70,7 +71,7 @@ TEST(Function, CreateInt64Variable)
     Function fn("fn");
     Variable& v = fn.createInt64("big", 1'000'000'000LL);
     EXPECT_EQ(v.type(), DataType::Int64);
-    EXPECT_EQ(v.initialValue(), 1'000'000'000LL);
+    EXPECT_EQ(std::get<int64_t>(v.initVariant()), 1'000'000'000LL);
 }
 
 TEST(Function, CreateMultipleVariables)
@@ -84,8 +85,8 @@ TEST(Function, CreateMultipleVariables)
 
 TEST(Variable, BasicProperties)
 {
-    Variable v("x", DataType::Int32, -7);
+    Variable v("x", DataType::Int32, InitValue{int64_t(-7)});
     EXPECT_EQ(v.name(), "x");
     EXPECT_EQ(v.type(), DataType::Int32);
-    EXPECT_EQ(v.initialValue(), -7);
+    EXPECT_EQ(std::get<int64_t>(v.initVariant()), -7);
 }

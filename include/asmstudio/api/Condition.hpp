@@ -1,32 +1,26 @@
-#pragma once
+#ifndef ASMSTUDIO_API_CONDITION_HPP
+#define ASMSTUDIO_API_CONDITION_HPP
+
+
+#include <asmstudio/core/Types.hpp>
 
 #include <cstdint>
+#include <functional>
+#include <variant>
 
-// Stub — Milestone 2 will flesh this out with comparison operators
-// and integration with Variable to build typed Condition objects
-// usable in Function::whileLoop and Function::ifStmt.
-
-namespace asmstudio {
-
+namespace asmstudio
+{
 class Variable;
 
-enum class ConditionKind
-{
-    LessThan,
-    LessEqual,
-    Equal,
-    NotEqual,
-    GreaterEqual,
-    GreaterThan,
-};
+using Operand = std::variant<std::reference_wrapper<const Variable>, int64_t, std::uint64_t, double, bool>;
 
 struct Condition
 {
-    const Variable* lhs{};
-    ConditionKind   kind{};
-    const Variable* rhs{};
-    int64_t         rhsImm{};
-    bool            rhsIsImmediate{false};
+    Operand lhs;
+    CmpKind kind;
+    Operand rhs;
 };
-
 } // namespace asmstudio
+
+
+#endif // ASMSTUDIO_API_CONDITION_HPP
