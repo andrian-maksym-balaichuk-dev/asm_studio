@@ -1,0 +1,144 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(
+    asm_studio
+    VERSION 0.1.0
+    DESCRIPTION "C++23 compile-time-aware assembler studio."
+    LANGUAGES CXX
+)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(BUILD_TESTING "Enable testing for this project." ${PROJECT_IS_TOP_LEVEL})
+option(ASM_BUILD_TESTS "Build the asm_studio test suite." ${PROJECT_IS_TOP_LEVEL})
+option(ASM_ENABLE_SANITIZERS "Enable AddressSanitizer and UBSan in debug builds." ON)
+
+set(ASM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
+set(ASM_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(ASM_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+
+# Compiler warning flags (applied to our targets only).
+set(ASM_WARNING_FLAGS
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wconversion
+    -Wsign-conversion
+    -Wshadow
+    -Wnon-virtual-dtor
+)
+
+# Sanitizer flags for debug builds.
+set(ASM_SANITIZER_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+
+# ---------------------------------------------------------------------------
+# asm_studio_lib — static library with all logic (no main).
+# Tests and the executable both link against this.
+# ---------------------------------------------------------------------------
+add_library(asm_studio_lib STATIC
+    ${ASM_SRC_DIR}/core/Diagnostic.cpp
+    ${ASM_SRC_DIR}/api/Program.cpp
+    ${ASM_SRC_DIR}/api/Function.cpp
+    ${ASM_SRC_DIR}/api/Variable.cpp
+)
+add_library(asm::studio ALIAS asm_studio_lib)
+
+target_include_directories(asm_studio_lib PUBLIC
+    $<BUILD_INTERFACE:${ASM_INCLUDE_DIR}>
+)
+target_compile_features(asm_studio_lib PUBLIC cxx_std_23)
+target_compile_options(asm_studio_lib PRIVATE ${ASM_WARNING_FLAGS})
+set_target_properties(
+    asm_studio_lib
+    PROPERTIES
+        CXX_EXTENSIONS OFF
+        FOLDER "asm_studio"
+)
+
+if(ASM_ENABLE_SANITIZERS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(asm_studio_lib PUBLIC ${ASM_SANITIZER_FLAGS})
+    target_link_options(asm_studio_lib PUBLIC ${ASM_SANITIZER_FLAGS})
+endif()
+
+# ---------------------------------------------------------------------------
+# asm_studio — main executable.
+# ---------------------------------------------------------------------------
+add_executable(asm_studio ${ASM_SRC_DIR}/main.cpp)
+target_link_libraries(asm_studio PRIVATE asm::studio)
+target_compile_options(asm_studio PRIVATE ${ASM_WARNING_FLAGS})
+set_target_properties(
+    asm_studio
+    PROPERTIES
+        CXX_EXTENSIONS OFF
+        FOLDER "asm_studio"
+)
+
+# ---------------------------------------------------------------------------
+# Tests.
+# ---------------------------------------------------------------------------
+if(ASM_BUILD_TESTS AND BUILD_TESTING)
+    enable_testing()
+    include(GoogleTest)
+
+    find_package(GTest CONFIG QUIET)
+    if(NOT GTest_FOUND)
+        include(FetchContent)
+        message(STATUS "GTest not found — fetching GoogleTest v1.15.2.")
+        set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            googletest
+            URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        )
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
+
+    # Helper: create a focused test binary.
+    set(ASM_TEST_TARGETS)
+    function(asm_add_test_executable target_name source_path)
+        add_executable(${target_name} ${source_path})
+        target_link_libraries(${target_name} PRIVATE asm::studio GTest::gtest_main)
+        target_compile_features(${target_name} PRIVATE cxx_std_23)
+        target_compile_options(${target_name} PRIVATE ${ASM_WARNING_FLAGS})
+        set_target_properties(
+            ${target_name}
+            PROPERTIES
+                CXX_EXTENSIONS OFF
+                FOLDER "tests"
+        )
+        gtest_discover_tests(
+            ${target_name}
+            TEST_PREFIX "asm."
+            DISCOVERY_TIMEOUT 60
+        )
+        list(APPEND ASM_TEST_TARGETS ${target_name})
+        set(ASM_TEST_TARGETS "${ASM_TEST_TARGETS}" PARENT_SCOPE)
+    endfunction()
+
+    asm_add_test_executable(asm_core_tests  ${ASM_TEST_DIR}/core/DiagnosticTest.cpp)
+    asm_add_test_executable(asm_api_tests   ${ASM_TEST_DIR}/api/ProgramApiTest.cpp)
+
+    # Aggregate binary: all test sources compiled together.
+    add_executable(asm_all_tests
+        ${ASM_TEST_DIR}/core/DiagnosticTest.cpp
+        ${ASM_TEST_DIR}/api/ProgramApiTest.cpp
+    )
+    target_link_libraries(asm_all_tests PRIVATE asm::studio GTest::gtest_main)
+    target_compile_features(asm_all_tests PRIVATE cxx_std_23)
+    target_compile_options(asm_all_tests PRIVATE ${ASM_WARNING_FLAGS})
+    set_target_properties(
+        asm_all_tests
+        PROPERTIES
+            CXX_EXTENSIONS OFF
+            FOLDER "tests"
+    )
+
+    add_custom_target(asm_check DEPENDS ${ASM_TEST_TARGETS})
+    set_target_properties(asm_check PROPERTIES FOLDER "tests")
+endif()
