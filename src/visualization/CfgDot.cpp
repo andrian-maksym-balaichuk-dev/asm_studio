@@ -1,7 +1,7 @@
 #include <asmstudio/visualization/CfgDot.hpp>
 
-#include <format>
 #include <sstream>
+#include <string>
 
 namespace asmstudio
 {
@@ -9,117 +9,105 @@ namespace asmstudio
 namespace
 {
 
-std::string nodeId(std::string_view fnName, BlockId id)
+[[nodiscard]] std::string blockNodeId(std::string_view functionName, BlockId blockId)
 {
-    return std::format("{}_blk_{}", fnName, id.value);
+    return std::string(functionName) + "_blk_" + std::to_string(blockId.value);
 }
 
-std::string escapeDot(std::string_view s)
+[[nodiscard]] std::string escapeDotLabel(std::string_view text)
 {
-    std::string out;
-    for (char c : s)
+    std::string escaped{};
+    for (const char character : text)
     {
-        if (c == '"')
+        if (character == '"')
         {
-            out += "\\\"";
+            escaped += "\\\"";
         }
         else
         {
-            out += c;
+            escaped += character;
         }
     }
-    return out;
+    return escaped;
 }
 
-std::string blockLabel(const IRBlock& blk)
+[[nodiscard]] std::string buildBlockLabel(const IRBlock& block)
 {
-    std::ostringstream oss;
-    oss << blk.name << "\\l";
-    for (const auto& instr : blk.instrs)
+    std::ostringstream labelStream{};
+    labelStream << block.name << "\\l";
+    for (const auto& instruction : block.instrs)
     {
-        if (instr.output)
+        if (instruction.output)
         {
-            oss << "v" << instr.output->value << " = ";
+            labelStream << "v" << instruction.output->value << " = ";
         }
-        switch (instr.op)
-        {
-        case IROp::Const: oss << "const"; break;
-        case IROp::Copy: oss << "copy"; break;
-        case IROp::Add: oss << "add"; break;
-        case IROp::Sub: oss << "sub"; break;
-        case IROp::Mul: oss << "mul"; break;
-        case IROp::Div: oss << "div"; break;
-        case IROp::Cmp: oss << "cmp"; break;
-        case IROp::Jmp: oss << "jmp"; break;
-        case IROp::BrTrue: oss << "brtrue"; break;
-        case IROp::Ret: oss << "ret"; break;
-        case IROp::Call: oss << "call"; break;
-        default: oss << "..."; break;
-        }
-        oss << "\\l";
+        labelStream << instruction.opName();
+        labelStream << "\\l";
     }
-    return escapeDot(oss.str());
+    return escapeDotLabel(labelStream.str());
 }
 
-void emitFunctionDot(std::ostringstream& out, const IRFunction& fn)
+void emitFunctionSubgraph(std::ostringstream& outputStream, const IRFunction& function)
 {
-    out << "  subgraph cluster_" << fn.name << " {\n";
-    out << "    label=\"" << fn.name << "\";\n";
-    out << "    style=filled; fillcolor=lightgrey;\n\n";
+    outputStream << "  subgraph cluster_" << function.name << " {\n";
+    outputStream << "    label=\"" << function.name << "\";\n";
+    outputStream << "    style=filled; fillcolor=lightgrey;\n\n";
 
-    for (const auto& blk : fn.blocks)
+    for (const auto& block : function.blocks)
     {
-        std::string nid = nodeId(fn.name, blk.id);
-        out << "    \"" << nid << "\" [shape=box, style=filled, fillcolor=white, "
-            << "label=\"" << blockLabel(blk) << "\", align=left];\n";
+        const std::string nodeIdentifier{ blockNodeId(function.name, block.id) };
+        outputStream << "    \"" << nodeIdentifier << "\" [shape=box, style=filled, fillcolor=white, "
+                     << "label=\"" << buildBlockLabel(block) << "\", align=left];\n";
     }
-    out << "\n";
+    outputStream << "\n";
 
-    for (const auto& blk : fn.blocks)
+    for (const auto& block : function.blocks)
     {
-        std::string src = nodeId(fn.name, blk.id);
-        for (const auto& instr : blk.instrs)
+        const std::string sourceNodeId{ blockNodeId(function.name, block.id) };
+        for (const auto& instruction : block.instrs)
         {
-            if (instr.trueTarget)
+            if (instruction.trueTarget)
             {
-                std::string dst = nodeId(fn.name, *instr.trueTarget);
-                std::string lbl = (instr.op == IROp::BrTrue) ? "T" : "";
-                out << "    \"" << src << "\" -> \"" << dst << "\"";
-                if (!lbl.empty())
-                    out << " [label=\"" << lbl << "\"]";
-                out << ";\n";
+                const std::string destNodeId{ blockNodeId(function.name, *instruction.trueTarget) };
+                const std::string edgeLabel{ (instruction.op == IROp::BrTrue) ? "T" : "" };
+                outputStream << "    \"" << sourceNodeId << "\" -> \"" << destNodeId << "\"";
+                if (!edgeLabel.empty())
+                {
+                    outputStream << " [label=\"" << edgeLabel << "\"]";
+                }
+                outputStream << ";\n";
             }
-            if (instr.falseTarget)
+            if (instruction.falseTarget)
             {
-                std::string dst = nodeId(fn.name, *instr.falseTarget);
-                out << "    \"" << src << "\" -> \"" << dst << "\" [label=\"F\"];\n";
+                const std::string destNodeId{ blockNodeId(function.name, *instruction.falseTarget) };
+                outputStream << "    \"" << sourceNodeId << "\" -> \"" << destNodeId << "\" [label=\"F\"];\n";
             }
         }
     }
-    out << "  }\n";
+    outputStream << "  }\n";
 }
 } // namespace
 
-std::string toDot(const IRFunction& fn)
+std::string toDot(const IRFunction& function)
 {
-    std::ostringstream out;
-    out << "digraph " << fn.name << " {\n";
-    out << "  rankdir=TB;\n";
-    emitFunctionDot(out, fn);
-    out << "}\n";
-    return out.str();
+    std::ostringstream outputStream{};
+    outputStream << "digraph " << function.name << " {\n";
+    outputStream << "  rankdir=TB;\n";
+    emitFunctionSubgraph(outputStream, function);
+    outputStream << "}\n";
+    return outputStream.str();
 }
 
 std::string toDot(const IRModule& module)
 {
-    std::ostringstream out;
-    out << "digraph " << module.name << " {\n";
-    out << "  rankdir=TB;\n";
-    for (const auto& fn : module.functions)
+    std::ostringstream outputStream{};
+    outputStream << "digraph " << module.name << " {\n";
+    outputStream << "  rankdir=TB;\n";
+    for (const auto& function : module.functions)
     {
-        emitFunctionDot(out, fn);
+        emitFunctionSubgraph(outputStream, function);
     }
-    out << "}\n";
-    return out.str();
+    outputStream << "}\n";
+    return outputStream.str();
 }
 } // namespace asmstudio

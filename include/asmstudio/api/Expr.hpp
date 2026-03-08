@@ -1,9 +1,9 @@
 #ifndef ASMSTUDIO_API_EXPR_HPP
 #define ASMSTUDIO_API_EXPR_HPP
 
+
 #include <asmstudio/core/Types.hpp>
 
-#include <cstdint>
 #include <functional>
 #include <memory>
 #include <variant>
@@ -18,6 +18,7 @@ struct VarExpr;
 
 using ExprNode = std::variant<ConstExpr, VarExpr, std::shared_ptr<BinExpr>, std::shared_ptr<UnaryExpr>>;
 
+
 struct ConstExpr
 {
     std::variant<int64_t, std::uint64_t, double, bool> value;
@@ -25,65 +26,77 @@ struct ConstExpr
 
 struct VarExpr
 {
-    std::reference_wrapper<const Variable> var;
+    std::reference_wrapper<const Variable> variable;
 };
 
 struct BinExpr
 {
+    BinExpr() = default;
+    BinExpr(const BinOp operation, ExprNode left, ExprNode right)
+    : op{ operation }, leftOperand{ std::move(left) }, rightOperand{ std::move(right) }
+    {}
+
     BinOp op;
-    ExprNode lhs;
-    ExprNode rhs;
+    ExprNode leftOperand;
+    ExprNode rightOperand;
 };
 
 struct UnaryExpr
 {
+    UnaryExpr() = default;
+    UnaryExpr(const UnaryOp operation, ExprNode value) : op{ operation }, operand{ std::move(value) } {}
+
     UnaryOp op;
     ExprNode operand;
 };
 
 
-[[nodiscard]] inline constexpr ExprNode expr(int64_t v)
+[[nodiscard]] inline ExprNode expr(int64_t value)
 {
-    return ConstExpr{ { v } };
+    return ConstExpr{ { value } };
 }
-[[nodiscard]] inline constexpr ExprNode expr(std::uint64_t v)
+[[nodiscard]] inline ExprNode expr(std::uint64_t value)
 {
-    return ConstExpr{ { v } };
+    return ConstExpr{ { value } };
 }
-[[nodiscard]] inline constexpr ExprNode expr(double v)
+[[nodiscard]] inline ExprNode expr(double value)
 {
-    return ConstExpr{ { v } };
-}
-[[nodiscard]] inline constexpr ExprNode expr(bool v)
-{
-    return ConstExpr{ { v } };
-}
-[[nodiscard]] inline ExprNode expr(const Variable& v)
-{
-    return VarExpr{ std::cref(v) };
+    return ConstExpr{ { value } };
 }
 
 
-[[nodiscard]] inline ExprNode add(ExprNode lhs, ExprNode rhs)
+[[nodiscard]] inline ExprNode expr(bool value)
 {
-    return std::make_shared<BinExpr>(BinOp::Add, std::move(lhs), std::move(rhs));
+    return ConstExpr{ { value } };
 }
-[[nodiscard]] inline ExprNode sub(ExprNode lhs, ExprNode rhs)
+[[nodiscard]] inline ExprNode expr(const Variable& variable)
 {
-    return std::make_shared<BinExpr>(BinOp::Sub, std::move(lhs), std::move(rhs));
+    return VarExpr{ std::cref(variable) };
 }
-[[nodiscard]] inline ExprNode mul(ExprNode lhs, ExprNode rhs)
+
+
+[[nodiscard]] inline ExprNode add(ExprNode leftOperand, ExprNode rightOperand)
 {
-    return std::make_shared<BinExpr>(BinOp::Mul, std::move(lhs), std::move(rhs));
+    return std::make_shared<BinExpr>(BinOp::Add, std::move(leftOperand), std::move(rightOperand));
 }
-[[nodiscard]] inline ExprNode div(ExprNode lhs, ExprNode rhs)
+[[nodiscard]] inline ExprNode sub(ExprNode leftOperand, ExprNode rightOperand)
 {
-    return std::make_shared<BinExpr>(BinOp::Div, std::move(lhs), std::move(rhs));
+    return std::make_shared<BinExpr>(BinOp::Sub, std::move(leftOperand), std::move(rightOperand));
 }
-[[nodiscard]] inline ExprNode mod(ExprNode lhs, ExprNode rhs)
+[[nodiscard]] inline ExprNode mul(ExprNode leftOperand, ExprNode rightOperand)
 {
-    return std::make_shared<BinExpr>(BinOp::Mod, std::move(lhs), std::move(rhs));
+    return std::make_shared<BinExpr>(BinOp::Mul, std::move(leftOperand), std::move(rightOperand));
 }
+[[nodiscard]] inline ExprNode div(ExprNode leftOperand, ExprNode rightOperand)
+{
+    return std::make_shared<BinExpr>(BinOp::Div, std::move(leftOperand), std::move(rightOperand));
+}
+[[nodiscard]] inline ExprNode mod(ExprNode leftOperand, ExprNode rightOperand)
+{
+    return std::make_shared<BinExpr>(BinOp::Mod, std::move(leftOperand), std::move(rightOperand));
+}
+
+
 [[nodiscard]] inline ExprNode neg(ExprNode operand)
 {
     return std::make_shared<UnaryExpr>(UnaryOp::Neg, std::move(operand));

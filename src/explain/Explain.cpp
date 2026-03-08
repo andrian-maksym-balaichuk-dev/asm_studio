@@ -1,177 +1,184 @@
 #include <asmstudio/explain/Explain.hpp>
 
-#include <algorithm>
-#include <format>
-#include <ranges>
+#include <asmstudio/core/Compat.hpp>
+
 #include <sstream>
 
 namespace asmstudio
 {
 namespace
 {
-std::size_t countLoops(const IRFunction& fn)
+[[nodiscard]] std::size_t countLoops(const IRFunction& function) noexcept
 {
-    // A loop exists if any block has a back-edge (target with smaller block id).
-    std::size_t loops = 0;
-    for (const auto& blk : fn.blocks)
+    // A back-edge (jump to a block with an equal or smaller index) indicates a loop.
+    std::size_t loopCount{ 0 };
+    for (const auto& block : function.blocks)
     {
-        for (const auto& instr : blk.instrs)
+        for (const auto& instruction : block.instrs)
         {
-            if (instr.trueTarget && instr.trueTarget->value <= blk.id.value)
+            if (instruction.trueTarget && instruction.trueTarget->value <= block.id.value)
             {
-                ++loops;
+                ++loopCount;
             }
         }
     }
-    return loops;
+    return loopCount;
 }
 
-std::size_t countBranches(const IRFunction& fn)
+[[nodiscard]] std::size_t countBranches(const IRFunction& function) noexcept
 {
-    std::size_t branches = 0;
-    for (const auto& blk : fn.blocks)
+    std::size_t branchCount{ 0 };
+    for (const auto& block : function.blocks)
     {
-        for (const auto& instr : blk.instrs)
+        for (const auto& instruction : block.instrs)
         {
-            if (instr.op == IROp::BrTrue)
+            if (instruction.op == IROp::BrTrue)
             {
-                ++branches;
+                ++branchCount;
             }
         }
     }
-
-    return branches;
+    return branchCount;
 }
 
-bool hasReturn(const IRFunction& fn)
+[[nodiscard]] bool hasReturnInstruction(const IRFunction& function) noexcept
 {
-    for (const auto& blk : fn.blocks)
+    for (const auto& block : function.blocks)
     {
-        for (const auto& instr : blk.instrs)
+        for (const auto& instruction : block.instrs)
         {
-            if (instr.op == IROp::Ret)
+            if (instruction.isTerminator() && instruction.op == IROp::Ret)
             {
                 return true;
             }
         }
     }
-
     return false;
 }
 
-bool returnsValue(const IRFunction& fn)
+[[nodiscard]] bool returnsValue(const IRFunction& function) noexcept
 {
-    for (const auto& blk : fn.blocks)
+    for (const auto& block : function.blocks)
     {
-        for (const auto& instr : blk.instrs)
+        for (const auto& instruction : block.instrs)
         {
-            if (instr.op == IROp::Ret && !instr.inputs.empty())
+            if (instruction.op == IROp::Ret && !instruction.inputs.empty())
             {
                 return true;
             }
         }
     }
-
     return false;
+}
+
+struct InstructionCounts
+{
+    std::size_t arithmetic{ 0 };
+    std::size_t comparisons{ 0 };
+    std::size_t calls{ 0 };
+    std::size_t memoryLoads{ 0 };
+    std::size_t memoryStores{ 0 };
+};
+
+[[nodiscard]] InstructionCounts countInstructionTypes(const IRFunction& function) noexcept
+{
+    InstructionCounts counts{};
+    for (const auto& block : function.blocks)
+    {
+        for (const auto& instruction : block.instrs)
+        {
+            if (instruction.isArithmetic())
+            {
+                ++counts.arithmetic;
+                continue;
+            }
+
+            switch (instruction.op)
+            {
+            case IROp::Cmp: ++counts.comparisons; break;
+            case IROp::Call: ++counts.calls; break;
+            case IROp::Load: ++counts.memoryLoads; break;
+            case IROp::Store: ++counts.memoryStores; break;
+            default: break;
+            }
+        }
+    }
+    return counts;
 }
 
 } // namespace
 
-std::string explain(const IRFunction& fn)
+std::string explain(const IRFunction& function)
 {
-    std::ostringstream out;
-    out << "Function '" << fn.name << "':\n";
+    std::ostringstream output{};
+    output << "Function '" << function.name << "':\n";
+    output << "  blocks    : " << function.blocks.size() << '\n';
+    output << "  values    : " << function.values.size() << '\n';
 
-    out << std::format("  blocks    : {}\n", fn.blocks.size());
-    out << std::format("  values    : {}\n", fn.values.size());
+    const std::size_t loopCount{ countLoops(function) };
+    const std::size_t branchCount{ countBranches(function) };
 
-    std::size_t loops = countLoops(fn);
-    std::size_t branches = countBranches(fn);
-
-    if (loops == 0 && branches == 0)
+    if (loopCount == 0 && branchCount == 0)
     {
-        out << "  structure : linear (no control flow)\n";
+        output << "  structure : linear (no control flow)\n";
     }
     else
     {
-        if (loops > 0)
-            out << std::format("  loops     : {} (back-edge count)\n", loops);
-        if (branches > 0)
-            out << std::format("  branches  : {} conditional branch(es)\n", branches);
-    }
-
-    if (hasReturn(fn))
-    {
-        if (returnsValue(fn))
-            out << "  returns   : value\n";
-        else
-            out << "  returns   : void\n";
-    }
-    else
-    {
-        out << "  returns   : falls through (no explicit ret)\n";
-    }
-
-    // Count instruction types.
-    std::size_t arithmetic = 0, comparisons = 0, calls = 0, loads = 0, stores = 0;
-    for (const auto& blk : fn.blocks)
-        for (const auto& instr : blk.instrs)
+        if (loopCount > 0)
         {
-            switch (instr.op)
-            {
-            case IROp::Add:
-            case IROp::Sub:
-            case IROp::Mul:
-            case IROp::Div:
-            case IROp::Mod:
-            case IROp::Neg:
-            case IROp::And:
-            case IROp::Or:
-            case IROp::Xor:
-            case IROp::Shl:
-            case IROp::Shr: ++arithmetic; break;
-            case IROp::Cmp: ++comparisons; break;
-            case IROp::Call: ++calls; break;
-            case IROp::Load: ++loads; break;
-            case IROp::Store: ++stores; break;
-            default: break;
-            }
+            output << "  loops     : " << loopCount << " (back-edge count)\n";
         }
-
-    if (arithmetic)
-    {
-        out << std::format("  arithmetic: {} operation(s)\n", arithmetic);
-    }
-    if (comparisons)
-    {
-        out << std::format("  comparisons: {}\n", comparisons);
-    }
-    if (calls)
-    {
-        out << std::format("  calls     : {} function call(s)\n", calls);
-    }
-    if (loads)
-    {
-        out << std::format("  memory loads : {}\n", loads);
-    }
-    if (stores)
-    {
-        out << std::format("  memory stores: {}\n", stores);
+        if (branchCount > 0)
+        {
+            output << "  branches  : " << branchCount << " conditional branch(es)\n";
+        }
     }
 
-    return out.str();
+    if (hasReturnInstruction(function))
+    {
+        output << (returnsValue(function) ? "  returns   : value\n" : "  returns   : void\n");
+    }
+    else
+    {
+        output << "  returns   : falls through (no explicit ret)\n";
+    }
+
+    const auto [arithmetic, comparisons, calls, memoryLoads, memoryStores]{ countInstructionTypes(function) };
+    if (arithmetic > 0)
+    {
+        output << "  arithmetic: " << arithmetic << " operation(s)\n";
+    }
+    if (comparisons > 0)
+    {
+        output << "  comparisons: " << comparisons << '\n';
+    }
+    if (calls > 0)
+    {
+        output << "  calls     : " << calls << " function call(s)\n";
+    }
+    if (memoryLoads > 0)
+    {
+        output << "  memory loads : " << memoryLoads << '\n';
+    }
+    if (memoryStores > 0)
+    {
+        output << "  memory stores: " << memoryStores << '\n';
+    }
+
+    return output.str();
 }
 
 std::string explain(const IRModule& module)
 {
-    std::ostringstream out;
-    out << "Module '" << module.name << "' — " << module.functions.size() << " function(s)\n\n";
+    std::ostringstream output{};
+    output << "Module '" << module.name << "' — " << module.functions.size() << " function(s)\n\n";
 
-    for (const auto& fn : module.functions)
+    for (const auto& function : module.functions)
     {
-        out << explain(fn) << '\n';
+        output << explain(function) << '\n';
     }
 
-    return out.str();
+    return output.str();
 }
+
 } // namespace asmstudio

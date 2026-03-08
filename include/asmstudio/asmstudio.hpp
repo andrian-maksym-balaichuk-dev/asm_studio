@@ -2,6 +2,8 @@
 #define ASMSTUDIO_ASMSTUDIO_HPP
 
 
+#include <asmstudio/core/Compat.hpp>
+
 // Core
 #include <asmstudio/core/Diagnostic.hpp>
 #include <asmstudio/core/SourceLocation.hpp>
@@ -18,12 +20,14 @@
 // IR
 #include <asmstudio/ir/IRTypes.hpp>
 
-// Compile-time assembly parser
+// Assembly parser
 #include <asmstudio/parser/AsmParse.hpp>
 
 // Studio tools
+#include <asmstudio/backend/Arm64Emitter.hpp>
 #include <asmstudio/backend/PseudoEmitter.hpp>
 #include <asmstudio/explain/Explain.hpp>
+#include <asmstudio/presentation/ConsolePresenter.hpp>
 #include <asmstudio/simulator/Simulator.hpp>
 #include <asmstudio/visualization/CfgDot.hpp>
 

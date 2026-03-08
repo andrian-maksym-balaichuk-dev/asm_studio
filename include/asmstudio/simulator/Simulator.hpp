@@ -2,14 +2,13 @@
 #define ASMSTUDIO_SIMULATOR_SIMULATOR_HPP
 
 
+#include <asmstudio/core/Compat.hpp>
 #include <asmstudio/ir/IRTypes.hpp>
 #include <asmstudio/simulator/SimState.hpp>
 
-#include <expected>
-#include <functional>
 #include <optional>
-#include <ostream>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace asmstudio
@@ -25,7 +24,7 @@ enum class SimError
     MaxStepsExceeded,
 };
 
-[[nodiscard]] constexpr std::string_view simErrorName(const SimError e) noexcept
+[[nodiscard]] constexpr std::string_view simErrorName(SimError e) noexcept
 {
     switch (e)
     {
@@ -42,18 +41,18 @@ enum class SimError
 class Simulator
 {
 public:
-    static constexpr std::size_t DefaultMaxSteps = 100'000;
-    static constexpr std::size_t DefaultMaxCallDepth = 64;
+    static constexpr std::size_t kDefaultMaxSteps{ 100'000 };
+    static constexpr std::size_t kDefaultMaxCallDepth{ 64 };
 
-    explicit Simulator(const IRModule& module, std::size_t maxSteps = DefaultMaxSteps, std::size_t maxCallDepth = DefaultMaxCallDepth);
+    explicit Simulator(const IRModule& module, std::size_t maxSteps = kDefaultMaxSteps, std::size_t maxCallDepth = kDefaultMaxCallDepth);
 
-    [[nodiscard]] std::expected<std::optional<RegValue>, SimError> run(std::string_view functionName);
+    [[nodiscard]] compat::Result<std::optional<RegValue>, SimError> run(std::string_view functionName);
 
-    [[nodiscard]] std::expected<bool, SimError> step();
+    [[nodiscard]] compat::Result<bool, SimError> step();
 
     void rewind(std::size_t steps = 1);
-
     void printTrace(std::ostream& out) const;
+    void reset();
 
     [[nodiscard]] const SimState& state() const noexcept
     {
@@ -64,18 +63,41 @@ public:
         return m_done;
     }
 
-    void reset();
-
 private:
-    [[nodiscard]] std::expected<bool, SimError> stepOne();
-    [[nodiscard]] const IRFunction* findFunction(std::string_view name) const noexcept;
+    struct FunctionCache
+    {
+        const IRFunction* function{ nullptr };
+        std::unordered_map<BlockId, std::size_t, BlockIdHash> blockIndexById{};
+    };
+
+    using StepResult = compat::Result<bool, SimError>;
+    using ValueResult = compat::Result<RegValue, SimError>;
+
+    [[nodiscard]] StepResult stepOne();
+
+    [[nodiscard]] StepResult handleConstOp(SimFrame& frame, const IRInstr& instr);
+    [[nodiscard]] StepResult handleCopyOp(SimFrame& frame, const IRInstr& instr, const IRFunction& function);
+    [[nodiscard]] StepResult handleBinaryOp(SimFrame& frame, const IRInstr& instr, const IRFunction& function);
+    [[nodiscard]] StepResult handleUnaryOp(SimFrame& frame, const IRInstr& instr, const IRFunction& function);
+    [[nodiscard]] StepResult handleCmpOp(SimFrame& frame, const IRInstr& instr, const IRFunction& function);
+    [[nodiscard]] StepResult handleJumpOp(SimFrame& frame, const IRInstr& instr);
+    [[nodiscard]] StepResult handleBranchOp(SimFrame& frame, const IRInstr& instr, const IRFunction& function);
+    [[nodiscard]] StepResult handleCallOp(SimFrame& frame, const IRInstr& instr);
+    [[nodiscard]] StepResult handleRetOp(SimFrame& frame, const IRInstr& instr, const IRFunction& function);
+
+    [[nodiscard]] ValueResult readValue(const SimFrame& frame, const IRFunction& function, ValueId valueId) const;
+    static void writeValue(SimFrame& frame, ValueId id, RegValue val);
+
+    [[nodiscard]] const FunctionCache* findFunctionCache(std::string_view name) const noexcept;
+    [[nodiscard]] const IRBlock* findBlock(const FunctionCache& cache, BlockId id) const noexcept;
 
     const IRModule& m_module;
     std::size_t m_maxSteps;
     std::size_t m_maxCallDepth;
-    SimState m_state;
-    std::vector<SimState> m_history; // snapshots for time-travel
-    std::vector<RegValue> m_trace;   // return values per call
+    std::unordered_map<std::string_view, FunctionCache> m_functionCache{};
+    SimState m_state{};
+    std::vector<SimState> m_history{}; // snapshots for time-travel
+    std::vector<RegValue> m_trace{};   // return values per call
     bool m_done{ true };
     std::size_t m_stepCount{ 0 };
 };

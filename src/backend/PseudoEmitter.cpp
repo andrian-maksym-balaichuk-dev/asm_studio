@@ -1,142 +1,111 @@
 #include <asmstudio/backend/PseudoEmitter.hpp>
 
-#include <format>
+#include <asmstudio/core/Compat.hpp>
+
 #include <sstream>
+#include <string>
 
 namespace asmstudio
 {
 namespace
 {
-std::string fmtValue(ValueId id)
+[[nodiscard]] std::string fmtValue(const ValueId valueId)
 {
-    return std::format("v{}", id.value);
-}
-std::string fmtBlock(BlockId id)
-{
-    return std::format(".blk_{}", id.value);
+    return "v" + std::to_string(valueId.value);
 }
 
-std::string fmtConstant(const IRConstant& c)
+[[nodiscard]] std::string fmtBlock(const BlockId blockId)
+{
+    return ".blk_" + std::to_string(blockId.value);
+}
+
+[[nodiscard]] std::string fmtConstant(const IRConstant& constant)
 {
     return std::visit(
-        []<typename T>(T v) -> std::string {
-            if constexpr (std::is_same_v<T, bool>)
-            {
-                return v ? "true" : "false";
-            }
-            else
-            {
-                return std::format("{}", v);
-            }
+        compat::Overloaded{
+            [](const bool value) -> std::string { return value ? "true" : "false"; },
+            [](const int64_t value) -> std::string { return std::to_string(value); },
+            [](const uint64_t value) -> std::string { return std::to_string(value); },
+            [](const double value) -> std::string { return std::to_string(value); },
         },
-        c);
+        constant);
 }
 
-std::string fmtOpcode(const IROp op)
+void emitInstruction(std::ostringstream& outputStream, const IRInstr& instruction, const IRFunction& function)
 {
-    switch (op)
+    outputStream << "    ";
+    if (instruction.output)
     {
-    case IROp::Const: return "const";
-    case IROp::Copy: return "copy";
-    case IROp::Add: return "add";
-    case IROp::Sub: return "sub";
-    case IROp::Mul: return "mul";
-    case IROp::Div: return "div";
-    case IROp::Mod: return "mod";
-    case IROp::And: return "and";
-    case IROp::Or: return "or";
-    case IROp::Xor: return "xor";
-    case IROp::Shl: return "shl";
-    case IROp::Shr: return "shr";
-    case IROp::Neg: return "neg";
-    case IROp::Not: return "not";
-    case IROp::Cmp: return "cmp";
-    case IROp::Jmp: return "jmp";
-    case IROp::BrTrue: return "brtrue";
-    case IROp::Call: return "call";
-    case IROp::Ret: return "ret";
-    case IROp::Load: return "load";
-    case IROp::Store: return "store";
-    }
-    return "?";
-}
-
-void emitInstr(std::ostringstream& out, const IRInstr& instr, const IRFunction& fn)
-{
-    out << "    ";
-    if (instr.output)
-    {
-        out << fmtValue(*instr.output) << " = ";
+        outputStream << fmtValue(*instruction.output) << " = ";
     }
 
-    out << fmtOpcode(instr.op);
+    outputStream << instruction.opName();
 
-    if (instr.cmpKind)
+    if (instruction.cmpKind)
     {
-        out << '.' << cmpKindName(*instr.cmpKind);
+        outputStream << '.' << cmpKindName(*instruction.cmpKind);
     }
 
-    if (instr.constVal)
+    if (instruction.constVal)
     {
-        out << ' ' << fmtConstant(*instr.constVal);
+        outputStream << ' ' << fmtConstant(*instruction.constVal);
     }
 
-    if (instr.callee)
+    if (instruction.callee)
     {
-        out << ' ' << *instr.callee;
+        outputStream << ' ' << *instruction.callee;
     }
 
-    for (const auto& inp : instr.inputs)
+    for (const auto inputValueId : instruction.inputs)
     {
-        out << ' ' << fmtValue(inp);
+        outputStream << ' ' << fmtValue(inputValueId);
     }
 
-    if (instr.trueTarget)
+    if (instruction.trueTarget)
     {
-        out << ' ' << fmtBlock(*instr.trueTarget);
+        outputStream << ' ' << fmtBlock(*instruction.trueTarget);
     }
-    if (instr.falseTarget)
+    if (instruction.falseTarget)
     {
-        out << " else " << fmtBlock(*instr.falseTarget);
-    }
-
-    // Type annotation.
-    if (instr.output && instr.output->value < fn.values.size())
-    {
-        out << "   ; " << dataTypeName(fn.values[instr.output->value].type);
+        outputStream << " else " << fmtBlock(*instruction.falseTarget);
     }
 
-    out << '\n';
+    if (instruction.output && instruction.output->value < function.values.size())
+    {
+        outputStream << "   ; " << dataTypeName(function.values[instruction.output->value].type);
+    }
+
+    outputStream << '\n';
 }
 } // namespace
 
-std::string emitPseudoAsm(const IRFunction& fn)
+std::string emitPseudoAsm(const IRFunction& function)
 {
-    std::ostringstream out;
-    out << fn.name << ":\n";
+    std::ostringstream outputStream{};
+    outputStream << function.name << ":\n";
 
-    for (const auto& [name, id, instrs] : fn.blocks)
+    for (const auto& [name, id, instrs] : function.blocks)
     {
-        out << fmtBlock(id) << ": ; " << name << '\n';
-        for (const auto& instr : instrs)
+        outputStream << fmtBlock(id) << ": ; " << name << '\n';
+        for (const auto& instruction : instrs)
         {
-            emitInstr(out, instr, fn);
+            emitInstruction(outputStream, instruction, function);
         }
     }
-    return out.str();
+    return outputStream.str();
 }
 
 std::string emitPseudoAsm(const IRModule& module)
 {
-    std::ostringstream out;
-    out << "; Module: " << module.name << "\n\n";
+    std::ostringstream outputStream{};
+    outputStream << "; Module: " << module.name << "\n\n";
 
-    for (const auto& fn : module.functions)
+    for (const auto& function : module.functions)
     {
-        out << emitPseudoAsm(fn) << '\n';
+        outputStream << emitPseudoAsm(function) << '\n';
     }
 
-    return out.str();
+    return outputStream.str();
 }
 
 } // namespace asmstudio

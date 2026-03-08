@@ -1,21 +1,23 @@
 #include <asmstudio/api/Program.hpp>
 
 #include <asmstudio/backend/PseudoEmitter.hpp>
+#include <asmstudio/core/Compat.hpp>
 #include <asmstudio/explain/Explain.hpp>
 #include <asmstudio/lowering/Lowering.hpp>
 #include <asmstudio/optimizer/Optimizer.hpp>
+#include <asmstudio/presentation/ConsolePresenter.hpp>
 #include <asmstudio/simulator/Simulator.hpp>
 #include <asmstudio/visualization/CfgDot.hpp>
 
 #include <fstream>
-#include <iostream>
-#include <print>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 
 namespace asmstudio
 {
-Program::Program(std::string name) : m_name(std::move(name)) {}
+
+Program::Program(std::string name, std::ostream& output) : m_name{ std::move(name) }, m_output{ output } {}
 
 std::string_view Program::name() const noexcept
 {
@@ -28,7 +30,7 @@ Function& Program::createFunction(std::string name)
     return *m_functions.back();
 }
 
-std::span<const std::unique_ptr<Function>> Program::functions() const noexcept
+compat::Span<const std::unique_ptr<Function>> Program::functions() const noexcept
 {
     return m_functions;
 }
@@ -37,9 +39,8 @@ const IRModule& Program::irModule() const
 {
     if (!m_irModule)
     {
-        throw std::runtime_error("build() has not been called");
+        throw std::runtime_error{ "build() has not been called" };
     }
-
     return *m_irModule;
 }
 
@@ -49,7 +50,7 @@ void Program::build()
 
     if (m_functions.empty())
     {
-        m_diagnostics.emit(Severity::Warning, "Program '" + std::string(m_name) + "' has no functions.");
+        m_diagnostics.emit(Severity::Warning, "Program '" + std::string{ m_name } + "' has no functions.");
         return;
     }
 
@@ -58,185 +59,140 @@ void Program::build()
 
 void Program::optimize(OptimizationLevel level)
 {
+    // Program orchestrates workflow only; the presenter owns console wording.
+    ConsolePresenter presenter{ m_output.get() };
     if (!m_irModule)
     {
-        std::println("[OPT] Call build() before optimize().");
+        presenter.printOptimizeRequiresBuild();
         return;
     }
 
-    Optimizer opt = makeOptimizer(level);
-    bool changed = opt.run(*m_irModule);
-
-    std::println("[OPT] {} passes ran, IR {}.", opt.passCount(), changed ? "was modified" : "unchanged");
+    Optimizer optimizer{ makeOptimizer(level) };
+    const bool changed{ optimizer.run(*m_irModule) };
+    presenter.printOptimizerSummary(optimizer.passCount(), changed);
 }
 
 void Program::showIR() const
 {
+    ConsolePresenter presenter{ m_output.get() };
     if (!m_irModule)
     {
-        std::println("[IR] Not built — call build() first.");
+        presenter.printNotBuilt("IR", "call build() first");
         return;
     }
 
-    std::println("=== IR: {} ===", m_name);
-    for (const auto& fn : m_irModule->functions)
-    {
-        std::println("fn {}:", fn.name);
-        for (const auto& blk : fn.blocks)
-        {
-            std::println("  .{}:", blk.name);
-            for (const auto& instr : blk.instrs)
-            {
-                std::print("    ");
-                if (instr.output)
-                {
-                    std::print("v{} = ", instr.output->value);
-                }
-
-                std::print("{}", [&] -> const char* {
-                    switch (instr.op)
-                    {
-                    case IROp::Const: return "const";
-                    case IROp::Copy: return "copy";
-                    case IROp::Add: return "add";
-                    case IROp::Sub: return "sub";
-                    case IROp::Mul: return "mul";
-                    case IROp::Div: return "div";
-                    case IROp::Cmp: return "cmp";
-                    case IROp::Jmp: return "jmp";
-                    case IROp::BrTrue: return "brtrue";
-                    case IROp::Ret: return "ret";
-                    case IROp::Call: return "call";
-                    default: return "...";
-                    }
-                }());
-                if (instr.cmpKind)
-                {
-                    std::print(".{}", cmpKindName(*instr.cmpKind));
-                }
-                for (auto id : instr.inputs)
-                {
-                    std::print(" v{}", id.value);
-                }
-                if (instr.constVal)
-                {
-                    std::visit([](auto v) { std::print(" {}", v); }, *instr.constVal);
-                }
-                if (instr.callee)
-                {
-                    std::print(" {}", *instr.callee);
-                }
-                if (instr.trueTarget)
-                {
-                    std::print(" -> blk_{}", instr.trueTarget->value);
-                }
-                if (instr.falseTarget)
-                {
-                    std::print(" else blk_{}", instr.falseTarget->value);
-                }
-                std::println();
-            }
-        }
-    }
+    presenter.printIR(m_name, *m_irModule);
 }
 
 void Program::showAssembly() const
 {
+    ConsolePresenter presenter{ m_output.get() };
     if (!m_irModule)
     {
-        std::println("[ASM] Not built — call build() first.");
+        presenter.printNotBuilt("ASM", "call build() first");
         return;
     }
-    std::println("=== Pseudo-Assembly: {} ===", m_name);
-    std::print("{}", emitPseudoAsm(*m_irModule));
+    presenter.printAssembly(m_name, emitPseudoAsm(*m_irModule));
 }
 
 void Program::showControlFlow() const
 {
+    ConsolePresenter presenter{ m_output.get() };
     if (!m_irModule)
     {
-        std::println("[CFG] Not built — call build() first.");
+        presenter.printNotBuilt("CFG", "call build() first");
         return;
     }
-    std::println("=== Control-Flow Graph (DOT): {} ===", m_name);
-    std::print("{}", toDot(*m_irModule));
+    presenter.printControlFlow(m_name, toDot(*m_irModule));
 }
 
 void Program::simulate(std::string_view functionName)
 {
+    ConsolePresenter presenter{ m_output.get() };
     if (!m_irModule)
     {
-        std::println("[SIM] Not built — call build() first.");
+        presenter.printNotBuilt("SIM", "call build() first");
         return;
     }
 
-    std::println("=== Simulation: {} in '{}' ===", m_name, functionName);
-    Simulator sim(*m_irModule);
+    presenter.printSimulationHeader(m_name, functionName);
+    Simulator simulator{ *m_irModule };
 
-    auto result = sim.run(functionName);
-    if (!result)
+    auto simulationResult{ simulator.run(functionName) };
+    if (!simulationResult)
     {
-        std::println("  Error: {}", simErrorName(result.error()));
+        presenter.printSimulationError(simulationResult.error());
         return;
     }
 
-    sim.printTrace(std::cout);
-    if (*result)
-    {
-        std::print("  Return value: ");
-        std::visit([](auto v) { std::print("{}", v); }, **result);
-        std::println();
-    }
-    else
-    {
-        std::println("  Return value: void");
-    }
+    // Capture the trace first so Program stays independent from the final sink.
+    std::ostringstream traceOutput{};
+    simulator.printTrace(traceOutput);
+    presenter.printSimulationTrace(traceOutput.str());
+    presenter.printReturnValue(*simulationResult);
 }
 
 void Program::explain(std::string_view functionName) const
 {
+    ConsolePresenter presenter{ m_output.get() };
     if (!m_irModule)
     {
-        std::println("[EXPLAIN] Not built — call build() first.");
+        presenter.printNotBuilt("EXPLAIN", "call build() first");
         return;
     }
 
-    for (const auto& fn : m_irModule->functions)
+    const IRFunction* function{ m_irModule->findFunction(functionName) };
+    if (function)
     {
-        if (fn.name == functionName)
-        {
-            std::print("{}", asmstudio::explain(fn));
-            return;
-        }
+        presenter.printExplain(asmstudio::explain(*function));
+        return;
     }
 
-    std::println("[EXPLAIN] Function '{}' not found.", functionName);
+    presenter.printMissingFunction(functionName);
 }
 
 void Program::visualize(std::string_view outputPath) const
 {
+    ConsolePresenter presenter{ m_output.get() };
     if (!m_irModule)
     {
-        std::println("[VIZ] Not built — call build() first.");
+        presenter.printNotBuilt("VIZ", "call build() first");
         return;
     }
 
-    std::string dot = toDot(*m_irModule);
-    std::ofstream file{ std::string(outputPath) };
-    if (!file)
+    const std::string dotOutput{ toDot(*m_irModule) };
+    std::ofstream outputFile{ std::string{ outputPath } };
+    if (!outputFile)
     {
-        std::println("[VIZ] Cannot open '{}' for writing.", outputPath);
+        presenter.printVisualizationOpenError(outputPath);
         return;
     }
 
-    file << dot;
-    std::println("[VIZ] DOT written to '{}'.", outputPath);
+    outputFile << dotOutput;
+    presenter.printVisualizationWritten(outputPath);
+}
+
+void Program::setOutput(std::ostream& output) noexcept
+{
+    // Swapping the sink here updates every console-facing feature at once.
+    m_output = output;
+}
+
+std::ostream& Program::output() noexcept
+{
+    return m_output.get();
+}
+
+const std::ostream& Program::output() const noexcept
+{
+    return m_output.get();
 }
 
 DiagnosticBag& Program::diagnostics() noexcept
 {
     return m_diagnostics;
 }
+
 const DiagnosticBag& Program::diagnostics() const noexcept
 {
     return m_diagnostics;

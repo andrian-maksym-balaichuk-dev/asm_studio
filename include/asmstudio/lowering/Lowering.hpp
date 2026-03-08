@@ -1,18 +1,22 @@
 #ifndef ASMSTUDIO_LOWERING_LOWERING_HPP
 #define ASMSTUDIO_LOWERING_LOWERING_HPP
 
+
+#include <asmstudio/core/Compat.hpp>
 #include <asmstudio/core/Diagnostic.hpp>
 #include <asmstudio/ir/IRTypes.hpp>
 
 #include <memory>
-#include <span>
 #include <string_view>
 
 namespace asmstudio
 {
 class Function;
 
-[[nodiscard]] IRModule lower(std::string_view moduleName, std::span<const std::unique_ptr<Function>> functions, DiagnosticBag& diags);
+// Translates a collection of API-level Function objects into an IRModule, performing lowering and emitting diagnostics as needed.
+// This is the main entry point for the lowering phase, called by Program::build() after the user has finished defining their functions.
+[[nodiscard]] IRModule lower(std::string_view moduleName, compat::Span<const std::unique_ptr<Function>> functions, DiagnosticBag& diagnostics);
 } // namespace asmstudio
+
 
 #endif // ASMSTUDIO_LOWERING_LOWERING_HPP

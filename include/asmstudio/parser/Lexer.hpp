@@ -19,7 +19,14 @@ inline constexpr std::array<std::string_view, 19> KnownMnemonics = { "mov",  "ad
 
 [[nodiscard]] constexpr bool isMnemonic(std::string_view word) noexcept
 {
-    return std::ranges::any_of(KnownMnemonics, [word](std::string_view m) { return m == word; });
+    for (const auto mnemonic : KnownMnemonics)
+    {
+        if (mnemonic == word)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 [[nodiscard]] constexpr bool isRegister(std::string_view word) noexcept
@@ -50,7 +57,9 @@ inline constexpr std::array<std::string_view, 19> KnownMnemonics = { "mov",  "ad
 class Lexer
 {
 public:
-    [[nodiscard]] constexpr explicit Lexer(std::string_view src) noexcept : m_src(src), m_pos(0), m_line(1), m_col(1) {}
+    [[nodiscard]] constexpr explicit Lexer(std::string_view source) noexcept
+    : m_src{ source }, m_pos{ 0 }, m_line{ 1 }, m_col{ 1 }
+    {}
 
     [[nodiscard]] constexpr Token next() noexcept
     {
@@ -61,45 +70,45 @@ public:
             return makeToken(TokenKind::Eof, {});
         }
 
-        char c = m_src[m_pos];
+        const char currentCharacter{ m_src[m_pos] };
 
-        if (c == '\n')
+        if (currentCharacter == '\n')
         {
-            Token tok = makeToken(TokenKind::Newline, m_src.substr(m_pos, 1));
+            Token token{ makeToken(TokenKind::Newline, m_src.substr(m_pos, 1)) };
             ++m_pos;
             ++m_line;
             m_col = 1;
-            return tok;
+            return token;
         }
 
-        if (c == ',')
+        if (currentCharacter == ',')
         {
             return advance(TokenKind::Comma);
         }
 
-        if (c == ':')
+        if (currentCharacter == ':')
         {
             return advance(TokenKind::Colon);
         }
 
-        if (c == ';')
+        if (currentCharacter == ';')
         {
-            std::size_t start = m_pos;
+            const std::size_t startPosition{ m_pos };
 
             while (m_pos < m_src.size() && m_src[m_pos] != '\n')
             {
                 ++m_pos;
             }
 
-            return makeToken(TokenKind::Comment, m_src.substr(start, m_pos - start));
+            return makeToken(TokenKind::Comment, m_src.substr(startPosition, m_pos - startPosition));
         }
 
-        if (c == '-' || (c >= '0' && c <= '9'))
+        if (currentCharacter == '-' || (currentCharacter >= '0' && currentCharacter <= '9'))
         {
             return lexNumber();
         }
 
-        if (isAlpha(c) || c == '_')
+        if (isAlpha(currentCharacter) || currentCharacter == '_')
         {
             return lexWord();
         }
@@ -130,9 +139,9 @@ private:
     {
         while (m_pos < m_src.size())
         {
-            char c = m_src[m_pos];
+            const char currentCharacter{ m_src[m_pos] };
 
-            if (c == ' ' || c == '\t' || c == '\r')
+            if (currentCharacter == ' ' || currentCharacter == '\t' || currentCharacter == '\r')
             {
                 ++m_pos;
                 ++m_col;
@@ -151,16 +160,16 @@ private:
 
     [[nodiscard]] constexpr Token advance(TokenKind kind) noexcept
     {
-        Token t = makeToken(kind, m_src.substr(m_pos, 1));
+        Token token{ makeToken(kind, m_src.substr(m_pos, 1)) };
         ++m_pos;
         ++m_col;
-        return t;
+        return token;
     }
 
     [[nodiscard]] constexpr Token lexNumber() noexcept
     {
-        std::size_t start = m_pos;
-        std::uint32_t startCol = m_col;
+        const std::size_t startPosition{ m_pos };
+        const std::uint32_t startColumn{ m_col };
 
         if (m_src[m_pos] == '-')
         {
@@ -174,13 +183,13 @@ private:
             ++m_col;
         }
 
-        return Token{ TokenKind::Immediate, m_src.substr(start, m_pos - start), m_line, startCol };
+        return Token{ TokenKind::Immediate, m_src.substr(startPosition, m_pos - startPosition), m_line, startColumn };
     }
 
     [[nodiscard]] constexpr Token lexWord() noexcept
     {
-        std::size_t start = m_pos;
-        std::uint32_t startCol = m_col;
+        const std::size_t startPosition{ m_pos };
+        const std::uint32_t startColumn{ m_col };
 
         while (m_pos < m_src.size() && (isAlNum(m_src[m_pos]) || m_src[m_pos] == '_'))
         {
@@ -188,7 +197,7 @@ private:
             ++m_col;
         }
 
-        std::string_view word = m_src.substr(start, m_pos - start);
+        const std::string_view word{ m_src.substr(startPosition, m_pos - startPosition) };
 
         // Peek: if next non-space char is ':', this is a label.
         std::size_t peek = m_pos;
@@ -200,20 +209,20 @@ private:
         if (peek < m_src.size() && m_src[peek] == ':')
         {
             m_pos = peek + 1;
-            m_col = startCol + static_cast<std::uint32_t>(m_pos - start);
-            return Token{ TokenKind::Label, word, m_line, startCol };
+            m_col = startColumn + static_cast<std::uint32_t>(m_pos - startPosition);
+            return Token{ TokenKind::Label, word, m_line, startColumn };
         }
 
         if (isRegister(word))
         {
-            return Token{ TokenKind::Register, word, m_line, startCol };
+            return Token{ TokenKind::Register, word, m_line, startColumn };
         }
         if (isMnemonic(word))
         {
-            return Token{ TokenKind::Mnemonic, word, m_line, startCol };
+            return Token{ TokenKind::Mnemonic, word, m_line, startColumn };
         }
 
-        return Token{ TokenKind::Unknown, word, m_line, startCol };
+        return Token{ TokenKind::Unknown, word, m_line, startColumn };
     }
 
     std::string_view m_src;

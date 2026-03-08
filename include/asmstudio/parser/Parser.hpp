@@ -1,6 +1,7 @@
 #ifndef ASMSTUDIO_PARSER_PARSER_HPP
 #define ASMSTUDIO_PARSER_PARSER_HPP
 
+
 #include <asmstudio/parser/AsmProgram.hpp>
 #include <asmstudio/parser/Lexer.hpp>
 #include <asmstudio/parser/Token.hpp>
@@ -11,90 +12,90 @@ namespace asmstudio::parser
 {
 [[nodiscard]] constexpr ParsedProgram parse(std::string_view src) noexcept
 {
-    ParsedProgram prog;
-    Lexer lex{ src };
+    ParsedProgram parsedProgram{};
+    Lexer lexer{ src };
 
-    auto skipNewlines = [&](Token& tok) {
-        while (tok.kind == TokenKind::Newline || tok.kind == TokenKind::Comment)
+    auto skipIgnorableTokens = [&](Token& token) {
+        while (token.kind == TokenKind::Newline || token.kind == TokenKind::Comment)
         {
-            tok = lex.next();
+            token = lexer.next();
         }
     };
 
-    Token tok = lex.next();
-    skipNewlines(tok);
+    Token token{ lexer.next() };
+    skipIgnorableTokens(token);
 
-    while (tok.kind != TokenKind::Eof)
+    while (token.kind != TokenKind::Eof)
     {
-        if (tok.kind == TokenKind::Label)
+        if (token.kind == TokenKind::Label)
         {
-            prog.addLabel(tok.text, static_cast<std::uint32_t>(prog.instructionCount()));
-            tok = lex.next();
-            skipNewlines(tok);
+            parsedProgram.addLabel(token.text, static_cast<std::uint32_t>(parsedProgram.instructionCount()));
+            token = lexer.next();
+            skipIgnorableTokens(token);
             continue;
         }
 
-        if (tok.kind == TokenKind::Mnemonic)
+        if (token.kind == TokenKind::Mnemonic)
         {
-            std::string_view mnemonic = tok.text;
-            std::uint32_t instrLine = tok.line;
-            std::string_view op1;
-            std::string_view op2;
+            const std::string_view mnemonic{ token.text };
+            const std::uint32_t instructionLine{ token.line };
+            std::string_view firstOperand{};
+            std::string_view secondOperand{};
 
-            tok = lex.next();
+            token = lexer.next();
 
-            if (tok.kind == TokenKind::Register || tok.kind == TokenKind::Immediate || tok.kind == TokenKind::Unknown)
+            if (token.kind == TokenKind::Register || token.kind == TokenKind::Immediate || token.kind == TokenKind::Unknown)
             {
-                op1 = tok.text;
-                tok = lex.next();
+                firstOperand = token.text;
+                token = lexer.next();
 
-                if (tok.kind == TokenKind::Comma)
+                if (token.kind == TokenKind::Comma)
                 {
-                    tok = lex.next();
-                    if (tok.kind == TokenKind::Register || tok.kind == TokenKind::Immediate ||
-                        tok.kind == TokenKind::Label || tok.kind == TokenKind::Unknown)
+                    token = lexer.next();
+                    if (token.kind == TokenKind::Register || token.kind == TokenKind::Immediate ||
+                        token.kind == TokenKind::Label || token.kind == TokenKind::Unknown)
                     {
-                        op2 = tok.text;
-                        tok = lex.next();
+                        secondOperand = token.text;
+                        token = lexer.next();
                     }
                     else
                     {
-                        prog.addDiagnostic("expected operand after ','", tok.line, tok.col, true);
+                        parsedProgram.addDiagnostic("expected operand after ','", token.line, token.col, true);
                     }
                 }
             }
 
-            if (tok.kind == TokenKind::Comment)
+            if (token.kind == TokenKind::Comment)
             {
-                tok = lex.next();
+                token = lexer.next();
             }
 
-            if (tok.kind != TokenKind::Newline && tok.kind != TokenKind::Eof)
+            if (token.kind != TokenKind::Newline && token.kind != TokenKind::Eof)
             {
-                prog.addDiagnostic("expected newline after instruction", tok.line, tok.col, false);
+                parsedProgram.addDiagnostic("expected newline after instruction", token.line, token.col, false);
 
-                while (tok.kind != TokenKind::Newline && tok.kind != TokenKind::Eof)
+                while (token.kind != TokenKind::Newline && token.kind != TokenKind::Eof)
                 {
-                    tok = lex.next();
+                    token = lexer.next();
                 }
             }
 
-            prog.addInstruction(mnemonic, op1, op2, instrLine);
-            skipNewlines(tok);
+            parsedProgram.addInstruction(mnemonic, firstOperand, secondOperand, instructionLine);
+            skipIgnorableTokens(token);
             continue;
         }
 
-        if (tok.kind == TokenKind::Comment || tok.kind == TokenKind::Newline)
+        if (token.kind == TokenKind::Comment || token.kind == TokenKind::Newline)
         {
-            skipNewlines(tok);
+            skipIgnorableTokens(token);
             continue;
         }
 
-        prog.addDiagnostic("unexpected token", tok.line, tok.col, false);
-        tok = lex.next();
+        parsedProgram.addDiagnostic("unexpected token", token.line, token.col, false);
+        token = lexer.next();
     }
 
-    return prog;
+    return parsedProgram;
 }
 } // namespace asmstudio::parser
 

@@ -1,19 +1,19 @@
 #ifndef ASMSTUDIO_API_FUNCTION_HPP
 #define ASMSTUDIO_API_FUNCTION_HPP
 
+
 #include <asmstudio/api/Condition.hpp>
 #include <asmstudio/api/Expr.hpp>
 #include <asmstudio/api/Stmt.hpp>
 #include <asmstudio/api/Variable.hpp>
+#include <asmstudio/core/Compat.hpp>
 
-#include <concepts>
-#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace asmstudio
@@ -25,30 +25,31 @@ public:
 
     [[nodiscard]] std::string_view name() const noexcept;
 
-    Variable& createInt8(std::string name, int8_t init = 0);
-    Variable& createInt16(std::string name, int16_t init = 0);
-    Variable& createInt(std::string name, int32_t init = 0);
-    Variable& createInt64(std::string name, int64_t init = 0);
-    Variable& createUInt32(std::string name, uint32_t init = 0);
-    Variable& createUInt64(std::string name, uint64_t init = 0);
-    Variable& createFloat(std::string name, float init = 0.f);
-    Variable& createDouble(std::string name, double init = 0.0);
-    Variable& createBool(std::string name, bool init = false);
-    Variable& createPtr(std::string name, uint64_t addr = 0);
+    Variable& createInt8(std::string name, int8_t initialValue = 0);
+    Variable& createInt16(std::string name, int16_t initialValue = 0);
+    Variable& createInt(std::string name, int32_t initialValue = 0);
+    Variable& createInt64(std::string name, int64_t initialValue = 0);
+    Variable& createUInt32(std::string name, uint32_t initialValue = 0);
+    Variable& createUInt64(std::string name, uint64_t initialValue = 0);
+    Variable& createFloat(std::string name, float initialValue = 0.f);
+    Variable& createDouble(std::string name, double initialValue = 0.0);
+    Variable& createBool(std::string name, bool initialValue = false);
+    Variable& createPtr(std::string name, uint64_t initialAddress = 0);
 
-    [[nodiscard]] std::span<const std::unique_ptr<Variable>> variables() const noexcept;
+    [[nodiscard]] compat::Span<const std::unique_ptr<Variable>> variables() const noexcept;
 
     void assign(Variable& target, ExprNode value);
+
+#ifdef ASM_CXX20
+#include <concepts>
+
 
     void whileLoop(const Condition cond, std::invocable auto&& body)
     {
         std::vector<Stmt> bodyStmts{};
-
         auto& prev{ m_currentBody.get() };
-
         m_currentBody = std::ref(bodyStmts);
         body();
-
         m_currentBody = std::ref(prev);
         pushStmt(Stmt{ WhileStmt{ cond, std::move(bodyStmts) } });
     }
@@ -62,27 +63,58 @@ public:
     {
         std::vector<Stmt> thenStmts{};
         std::vector<Stmt> elseStmts{};
-
         auto& prev{ m_currentBody.get() };
-
         m_currentBody = std::ref(thenStmts);
         thenBody();
-
         m_currentBody = std::ref(elseStmts);
         elseBody();
-
         m_currentBody = std::ref(prev);
         pushStmt(Stmt{ IfStmt{ cond, std::move(thenStmts), std::move(elseStmts) } });
     }
 
-    void ret(std::optional<ExprNode> value = std::nullopt);
-    void call(std::string_view callee, std::vector<ExprNode> args = {});
+#else // C++17: SFINAE instead of std::invocable
 
-    [[nodiscard]] std::span<const Stmt> statements() const noexcept;
+    template <typename F, typename = std::enable_if_t<std::is_invocable_v<F>>>
+    void whileLoop(const Condition cond, F&& body)
+    {
+        std::vector<Stmt> bodyStmts{};
+        auto& prev{ m_currentBody.get() };
+        m_currentBody = std::ref(bodyStmts);
+        body();
+        m_currentBody = std::ref(prev);
+        pushStmt(Stmt{ WhileStmt{ cond, std::move(bodyStmts) } });
+    }
+
+    template <typename F, typename = std::enable_if_t<std::is_invocable_v<F>>>
+    void ifStmt(Condition cond, F&& thenBody)
+    {
+        ifElse(std::move(cond), std::forward<F>(thenBody), [] {});
+    }
+
+    template <typename F, typename G, typename = std::enable_if_t<std::is_invocable_v<F> && std::is_invocable_v<G>>>
+    void ifElse(const Condition cond, F&& thenBody, G&& elseBody)
+    {
+        std::vector<Stmt> thenStmts{};
+        std::vector<Stmt> elseStmts{};
+        auto& prev{ m_currentBody.get() };
+        m_currentBody = std::ref(thenStmts);
+        thenBody();
+        m_currentBody = std::ref(elseStmts);
+        elseBody();
+        m_currentBody = std::ref(prev);
+        pushStmt(Stmt{ IfStmt{ cond, std::move(thenStmts), std::move(elseStmts) } });
+    }
+
+#endif // ASM_CXX20
+
+    void ret(std::optional<ExprNode> value = std::nullopt);
+    void call(std::string_view callee, std::vector<ExprNode> arguments = {});
+
+    [[nodiscard]] compat::Span<const Stmt> statements() const noexcept;
 
 private:
-    Variable& makeVar(std::string name, DataType type, InitValue init);
-    void pushStmt(Stmt stmt) const;
+    Variable& makeVar(std::string name, DataType type, InitValue initialValue);
+    void pushStmt(Stmt statement) const;
 
     std::string m_name;
     std::vector<std::unique_ptr<Variable>> m_vars;

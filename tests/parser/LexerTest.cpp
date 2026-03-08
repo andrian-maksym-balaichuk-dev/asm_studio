@@ -8,8 +8,13 @@ using namespace asmstudio::parser;
 
 TEST(Lexer, EmptyInputGivesEof)
 {
+    // Given
     Lexer lex("");
+
+    // When
     Token t = lex.next();
+
+    // Then
     EXPECT_EQ(t.kind, TokenKind::Eof);
 }
 
@@ -62,12 +67,17 @@ TEST(Lexer, CommaToken)
 
 TEST(Lexer, CommentSkipped)
 {
+    // Given
     Lexer lex("; this is a comment\nret");
+
+    // When
     Token t = lex.next();
     // Comments should be either skipped or returned as Comment
     // Either way the next meaningful token is ret (Mnemonic) or Newline then ret
     while (t.kind == TokenKind::Comment || t.kind == TokenKind::Newline)
         t = lex.next();
+
+    // Then
     EXPECT_EQ(t.kind, TokenKind::Mnemonic);
     EXPECT_EQ(t.text, "ret");
 }
@@ -101,11 +111,30 @@ TEST(Lexer, MultipleRegisters)
 
 TEST(Lexer, LineNumberTracked)
 {
+    // Given
     Lexer lex("mov r0, 0\nadd r0, 1");
     Token t;
-    // advance to second line
+
+    // When: advance until the lexer reaches line two.
     while ((t = lex.next()).kind != TokenKind::Eof && t.line < 2)
     {}
+
+    // Then
     if (t.kind != TokenKind::Eof)
         EXPECT_EQ(t.line, 2u);
+}
+
+TEST(Lexer, UnknownIdentifierTokenizedAsUnknown)
+{
+    Lexer lexer("mystery");
+    const Token token = lexer.next();
+    EXPECT_EQ(token.kind, TokenKind::Unknown);
+    EXPECT_EQ(token.text, "mystery");
+}
+
+TEST(Lexer, UnexpectedCharacterBecomesError)
+{
+    Lexer lexer("@");
+    const Token token = lexer.next();
+    EXPECT_EQ(token.kind, TokenKind::Error);
 }

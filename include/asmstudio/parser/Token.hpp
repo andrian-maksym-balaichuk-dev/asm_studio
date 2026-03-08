@@ -1,12 +1,12 @@
 #ifndef ASMSTUDIO_PARSER_TOKEN_HPP
 #define ASMSTUDIO_PARSER_TOKEN_HPP
 
+
 #include <cstdint>
 #include <string_view>
 
 namespace asmstudio::parser
 {
-
 enum class TokenKind : std::uint8_t
 {
     Label,     // identifier followed by ':'

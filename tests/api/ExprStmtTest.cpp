@@ -7,9 +7,16 @@
 
 using namespace asmstudio;
 
+// ---------------------------------------------------------------------------
+// Expr node construction
+// ---------------------------------------------------------------------------
+
 TEST(Expr, ConstInt)
 {
+    // Given / When
     auto e = expr(int64_t(42));
+
+    // Then
     EXPECT_TRUE(std::holds_alternative<ConstExpr>(e));
     auto& ce = std::get<ConstExpr>(e);
     EXPECT_EQ(std::get<int64_t>(ce.value), 42);
@@ -29,12 +36,19 @@ TEST(Expr, ConstBool)
     EXPECT_TRUE(std::get<bool>(std::get<ConstExpr>(e).value));
 }
 
+TEST(Expr, ConstUInt64)
+{
+    auto e = expr(uint64_t(99));
+    EXPECT_TRUE(std::holds_alternative<ConstExpr>(e));
+    EXPECT_EQ(std::get<uint64_t>(std::get<ConstExpr>(e).value), 99u);
+}
+
 TEST(Expr, VarRef)
 {
     Variable v("x", DataType::Int32, InitValue{ int64_t(0) });
     auto e = expr(v);
     EXPECT_TRUE(std::holds_alternative<VarExpr>(e));
-    EXPECT_EQ(std::get<VarExpr>(e).var.get().name(), "x");
+    EXPECT_EQ(std::get<VarExpr>(e).variable.get().name(), "x");
 }
 
 TEST(Expr, BinAdd)
@@ -66,6 +80,13 @@ TEST(Expr, BinDiv)
     EXPECT_EQ(be.op, BinOp::Div);
 }
 
+TEST(Expr, BinMod)
+{
+    auto e = mod(expr(int64_t(10)), expr(int64_t(3)));
+    auto& be = *std::get<std::shared_ptr<BinExpr>>(e);
+    EXPECT_EQ(be.op, BinOp::Mod);
+}
+
 TEST(Expr, UnaryNeg)
 {
     auto e = neg(expr(int64_t(7)));
@@ -83,12 +104,14 @@ TEST(Expr, UnaryBitNot)
 
 TEST(Expr, NestedBin)
 {
-    // (1 + 2) * 3
+    // Given / When: (1 + 2) * 3
     auto e = mul(add(expr(int64_t(1)), expr(int64_t(2))), expr(int64_t(3)));
+
+    // Then
     EXPECT_TRUE(std::holds_alternative<std::shared_ptr<BinExpr>>(e));
     auto& outer = *std::get<std::shared_ptr<BinExpr>>(e);
     EXPECT_EQ(outer.op, BinOp::Mul);
-    EXPECT_TRUE(std::holds_alternative<std::shared_ptr<BinExpr>>(outer.lhs));
+    EXPECT_TRUE(std::holds_alternative<std::shared_ptr<BinExpr>>(outer.leftOperand));
 }
 
 // ---------------------------------------------------------------------------
@@ -97,9 +120,14 @@ TEST(Expr, NestedBin)
 
 TEST(Stmt, AssignCollected)
 {
+    // Given
     Function fn("test");
     Variable& x = fn.createInt("x", 0);
+
+    // When
     fn.assign(x, expr(int64_t(42)));
+
+    // Then
     EXPECT_EQ(fn.statements().size(), 1u);
     EXPECT_TRUE(std::holds_alternative<AssignStmt>(fn.statements()[0].var()));
 }
@@ -127,7 +155,7 @@ TEST(Stmt, Call)
     fn.call("helper", { expr(int64_t(1)) });
     auto& cs = std::get<CallStmt>(fn.statements()[0].var());
     EXPECT_EQ(cs.callee, "helper");
-    EXPECT_EQ(cs.args.size(), 1u);
+    EXPECT_EQ(cs.arguments.size(), 1u);
 }
 
 TEST(Stmt, WhileLoop)
@@ -175,4 +203,19 @@ TEST(Stmt, NestedWhile)
     auto& outer = std::get<WhileStmt>(fn.statements()[0].var());
     EXPECT_EQ(outer.body.size(), 2u);
     EXPECT_TRUE(std::holds_alternative<WhileStmt>(outer.body[0].var()));
+}
+
+TEST(Stmt, VariantAccessorsExposeMutableAndConstViews)
+{
+    // Given
+    Stmt statement{ ReturnStmt{ std::nullopt } };
+    EXPECT_TRUE(std::holds_alternative<ReturnStmt>(statement.variant()));
+
+    // When
+    std::get<ReturnStmt>(statement.variant()).value = expr(int64_t(3));
+    const Stmt& constStatement = statement;
+
+    // Then
+    ASSERT_TRUE(std::holds_alternative<ReturnStmt>(constStatement.variant()));
+    EXPECT_TRUE(std::get<ReturnStmt>(constStatement.variant()).value.has_value());
 }

@@ -5,9 +5,16 @@
 
 using namespace asmstudio;
 
+// ---------------------------------------------------------------------------
+// Basic bag state
+// ---------------------------------------------------------------------------
+
 TEST(DiagnosticBag, StartsEmpty)
 {
+    // Given
     DiagnosticBag bag;
+
+    // Then
     EXPECT_TRUE(bag.empty());
     EXPECT_FALSE(bag.hasErrors());
     EXPECT_TRUE(bag.all().empty());
@@ -48,10 +55,15 @@ TEST(DiagnosticBag, EmitFatalSetsHasErrors)
 
 TEST(DiagnosticBag, MultipleEntries)
 {
+    // Given
     DiagnosticBag bag;
+
+    // When
     bag.emit(Severity::Note, "first");
     bag.emit(Severity::Warning, "second");
     bag.emit(Severity::Error, "third");
+
+    // Then
     EXPECT_EQ(bag.all().size(), 3u);
     EXPECT_TRUE(bag.hasErrors());
 }
@@ -67,10 +79,15 @@ TEST(DiagnosticBag, ClearResetsState)
 
 TEST(DiagnosticBag, PrintOutputContainsMessage)
 {
+    // Given
     DiagnosticBag bag;
     bag.emit(Severity::Error, "bad operand");
     std::ostringstream oss;
+
+    // When
     bag.print(oss);
+
+    // Then
     EXPECT_NE(oss.str().find("bad operand"), std::string::npos);
     EXPECT_NE(oss.str().find("error"), std::string::npos);
 }

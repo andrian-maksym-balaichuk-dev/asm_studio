@@ -1,8 +1,8 @@
 #include <asmstudio/asmstudio.hpp>
 
 #include <iostream>
-#include <print>
 
+#ifdef ASM_CXX20
 constexpr auto kSumLoop = asmstudio::asm_parse<R"(
     mov r0, 0
     mov r1, 0
@@ -19,69 +19,95 @@ done:
 static_assert(kSumLoop.ok(), "Inline assembly must be valid");
 static_assert(kSumLoop.instructionCount() == 8u, "Expected 8 instructions");
 static_assert(kSumLoop.labelCount() == 2u, "Expected 2 labels");
+#endif
 
 namespace
 {
 void printSeparator(std::string_view title)
 {
-    std::println("\n{:=<60}", "");
-    std::println("  {}", title);
-    std::println("{:=<60}", "");
+    asmstudio::compat::println("\n{:=<60}", "");
+    asmstudio::compat::println("  {}", title);
+    asmstudio::compat::println("{:=<60}", "");
 }
 } // namespace
 
 
 int main()
 {
-    std::println("=== AsmStudio v0.2.0 — Full Feature Demo ===\n");
+    asmstudio::compat::println("=== AsmStudio v0.2.0 — Full Feature Demo ===\n");
 
+#ifdef ASM_CXX20
     printSeparator("Compile-Time Assembly Parser");
-    std::println("Parsed at compile time (consteval):");
-    std::println("  instructions : {}", kSumLoop.instructionCount());
-    std::println("  labels       : {}", kSumLoop.labelCount());
-    std::println("  ok           : {}", kSumLoop.ok());
+    asmstudio::compat::println("Parsed at compile time (consteval):");
+    asmstudio::compat::println("  instructions : {}", kSumLoop.instructionCount());
+    asmstudio::compat::println("  labels       : {}", kSumLoop.labelCount());
+    asmstudio::compat::println("  ok           : {}", kSumLoop.ok());
+#else
+    printSeparator("Runtime Assembly Parser");
+    const auto parsedSumLoopProgram{ asmstudio::asm_parse_runtime(R"(
+        mov r0, 0
+        mov r1, 0
+    loop:
+        cmp r0, 10
+        jge done
+        add r1, r0
+        add r0, 1
+        jmp loop
+    done:
+        ret
+    )") };
+    asmstudio::compat::println("Parsed at runtime:");
+    asmstudio::compat::println("  instructions : {}", parsedSumLoopProgram.instructionCount());
+    asmstudio::compat::println("  labels       : {}", parsedSumLoopProgram.labelCount());
+    asmstudio::compat::println("  ok           : {}", parsedSumLoopProgram.ok());
+#endif
 
     printSeparator("OOP DSL Program Builder");
 
-    asmstudio::Program studio("demo");
+    asmstudio::Program studio{ "demo" };
 
     // --- Function: sum(0..9) via while loop ---
-    auto& sum_fn = studio.createFunction("sum");
-    auto& i = sum_fn.createInt("i", 0);
-    auto& total = sum_fn.createInt("total", 0);
+    auto& sumFunction{ studio.createFunction("sum") };
+    auto& index{ sumFunction.createInt("i", 0) };
+    auto& total{ sumFunction.createInt("total", 0) };
 
-    sum_fn.assign(i, asmstudio::expr(int64_t(0)));
-    sum_fn.assign(total, asmstudio::expr(int64_t(0)));
+    sumFunction.assign(index, asmstudio::expr(int64_t(0)));
+    sumFunction.assign(total, asmstudio::expr(int64_t(0)));
 
-    sum_fn.whileLoop(i < int64_t(10), [&] {
-        sum_fn.assign(total, asmstudio::add(asmstudio::expr(total), asmstudio::expr(i)));
-        sum_fn.assign(i, asmstudio::add(asmstudio::expr(i), asmstudio::expr(int64_t(1))));
+    sumFunction.whileLoop(index < int64_t(10), [&] {
+        sumFunction.assign(total, asmstudio::add(asmstudio::expr(total), asmstudio::expr(index)));
+        sumFunction.assign(index, asmstudio::add(asmstudio::expr(index), asmstudio::expr(int64_t(1))));
     });
-    sum_fn.ret(asmstudio::expr(total));
+    sumFunction.ret(asmstudio::expr(total));
 
     // --- Function: abs(x) using if/else ---
-    auto& abs_fn = studio.createFunction("abs_val");
-    auto& x = abs_fn.createInt("x", 0);
-    abs_fn.assign(x, asmstudio::expr(int64_t(-5)));
-    abs_fn.ifElse(x < int64_t(0), [&] { abs_fn.assign(x, asmstudio::neg(asmstudio::expr(x))); }, [&] { /* x already positive */ });
-    abs_fn.ret(asmstudio::expr(x));
+    auto& absoluteValueFunction{ studio.createFunction("abs_val") };
+    auto& inputValue{ absoluteValueFunction.createInt("x", 0) };
+    absoluteValueFunction.assign(inputValue, asmstudio::expr(int64_t(-5)));
+    absoluteValueFunction.ifElse(
+        inputValue < int64_t(0),
+        [&] { absoluteValueFunction.assign(inputValue, asmstudio::neg(asmstudio::expr(inputValue))); },
+        [&] { /* x already positive */ });
+    absoluteValueFunction.ret(asmstudio::expr(inputValue));
 
     // --- Function: factorial (loop) ---
-    auto& fact_fn = studio.createFunction("factorial");
-    auto& n = fact_fn.createInt("n", 0);
-    auto& result = fact_fn.createInt("result", 0);
-    fact_fn.assign(n, asmstudio::expr(int64_t(6)));
-    fact_fn.assign(result, asmstudio::expr(int64_t(1)));
-    fact_fn.whileLoop(n > int64_t(1), [&] {
-        fact_fn.assign(result, asmstudio::mul(asmstudio::expr(result), asmstudio::expr(n)));
-        fact_fn.assign(n, asmstudio::sub(asmstudio::expr(n), asmstudio::expr(int64_t(1))));
+    auto& factorialFunction{ studio.createFunction("factorial") };
+    auto& currentFactor{ factorialFunction.createInt("n", 0) };
+    auto& factorialResult{ factorialFunction.createInt("result", 0) };
+    factorialFunction.assign(currentFactor, asmstudio::expr(int64_t(6)));
+    factorialFunction.assign(factorialResult, asmstudio::expr(int64_t(1)));
+    factorialFunction.whileLoop(currentFactor > int64_t(1), [&] {
+        factorialFunction.assign(factorialResult, asmstudio::mul(asmstudio::expr(factorialResult), asmstudio::expr(currentFactor)));
+        factorialFunction.assign(currentFactor, asmstudio::sub(asmstudio::expr(currentFactor), asmstudio::expr(int64_t(1))));
     });
-    fact_fn.ret(asmstudio::expr(result));
+    factorialFunction.ret(asmstudio::expr(factorialResult));
 
-    std::println("Functions defined: {}", studio.functions().size());
-    for (const auto& fn : studio.functions())
+    asmstudio::compat::println("Functions defined: {}", studio.functions().size());
+    for (const auto& function : studio.functions())
     {
-        std::println("  '{}' — {} variable(s), {} statement(s)", fn->name(), fn->variables().size(), fn->statements().size());
+        asmstudio::compat::println(
+            "  '{}' — {} variable(s), {} statement(s)", function->name(), function->variables().size(),
+            function->statements().size());
     }
 
     printSeparator("IR Lowering");
@@ -89,15 +115,16 @@ int main()
 
     if (studio.diagnostics().hasErrors())
     {
-        std::println("Build errors:");
+        asmstudio::compat::println("Build errors:");
         studio.diagnostics().print(std::cout);
         return 1;
     }
-    std::println("Build OK. IR module: '{}'", studio.irModule().name);
-    std::println("IR functions: {}", studio.irModule().functions.size());
-    for (const auto& fn : studio.irModule().functions)
+    asmstudio::compat::println("Build OK. IR module: '{}'", studio.irModule().name);
+    asmstudio::compat::println("IR functions: {}", studio.irModule().functions.size());
+    for (const auto& function : studio.irModule().functions)
     {
-        std::println("  '{}' — {} blocks, {} values", fn.name, fn.blocks.size(), fn.values.size());
+        asmstudio::compat::println(
+            "  '{}' — {} blocks, {} values", function.name, function.blocks.size(), function.values.size());
     }
 
     printSeparator("Pseudo-Assembly Output");
@@ -105,18 +132,21 @@ int main()
 
     printSeparator("Optimizer");
     studio.optimize(asmstudio::OptimizationLevel::Aggressive);
-    std::println("Optimization complete (aggressive level).");
-    for (const auto& fn : studio.irModule().functions)
-        std::println("  '{}' — {} blocks, {} values after optimization", fn.name, fn.blocks.size(), fn.values.size());
+    asmstudio::compat::println("Optimization complete (aggressive level).");
+    for (const auto& function : studio.irModule().functions)
+    {
+        asmstudio::compat::println(
+            "  '{}' — {} blocks, {} values after optimization", function.name, function.blocks.size(), function.values.size());
+    }
 
     printSeparator("Simulator");
-    std::println("Running 'sum':");
+    asmstudio::compat::println("Running 'sum':");
     studio.simulate("sum");
 
-    std::println("\nRunning 'abs_val':");
+    asmstudio::compat::println("\nRunning 'abs_val':");
     studio.simulate("abs_val");
 
-    std::println("\nRunning 'factorial':");
+    asmstudio::compat::println("\nRunning 'factorial':");
     studio.simulate("factorial");
 
     printSeparator("Explain Mode");
@@ -127,6 +157,6 @@ int main()
     printSeparator("Control Flow Graph (DOT)");
     studio.showControlFlow();
 
-    std::println("\n=== Demo complete ===");
+    asmstudio::compat::println("\n=== Demo complete ===");
     return 0;
 }

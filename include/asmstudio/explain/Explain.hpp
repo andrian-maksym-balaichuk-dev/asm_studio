@@ -1,13 +1,16 @@
 #ifndef ASMSTUDIO_EXPLAIN_EXPLAIN_HPP
 #define ASMSTUDIO_EXPLAIN_EXPLAIN_HPP
 
+
 #include <asmstudio/ir/IRTypes.hpp>
 
 #include <string>
 
 namespace asmstudio
 {
-[[nodiscard]] std::string explain(const IRFunction& fn);
+// Generates a human-readable explanation of the IR function / module as a string.
+// This is intended for debugging and educational purposes, not for actual code generation.
+[[nodiscard]] std::string explain(const IRFunction& function);
 [[nodiscard]] std::string explain(const IRModule& module);
 } // namespace asmstudio
 

@@ -1,6 +1,7 @@
 #include <asmstudio/core/Diagnostic.hpp>
 
-#include <algorithm>
+#include <asmstudio/core/Compat.hpp>
+
 #include <string_view>
 #include <utility>
 
@@ -8,9 +9,9 @@ namespace asmstudio
 {
 namespace
 {
-constexpr std::string_view severityLabel(Severity s) noexcept
+constexpr std::string_view severityLabel(Severity severity) noexcept
 {
-    switch (s)
+    switch (severity)
     {
     case Severity::Note: return "note";
     case Severity::Warning: return "warning";
@@ -23,29 +24,29 @@ constexpr std::string_view severityLabel(Severity s) noexcept
 
 void DiagnosticBag::emit(Severity severity, std::string message, SourceRange range)
 {
-    m_diagnostic.push_back({ severity, std::move(message), range });
+    m_diagnostics.push_back({ severity, std::move(message), range });
 }
 
 bool DiagnosticBag::hasErrors() const noexcept
 {
-    return std::ranges::any_of(m_diagnostic, [](const Diagnostic& d) {
-        return d.severity == Severity::Error || d.severity == Severity::Fatal;
+    return compat::ranges::any_of(m_diagnostics, [](const Diagnostic& diagnostic) {
+        return diagnostic.severity == Severity::Error || diagnostic.severity == Severity::Fatal;
     });
 }
 
 bool DiagnosticBag::empty() const noexcept
 {
-    return m_diagnostic.empty();
+    return m_diagnostics.empty();
 }
 
-std::span<const Diagnostic> DiagnosticBag::all() const noexcept
+compat::Span<const Diagnostic> DiagnosticBag::all() const noexcept
 {
-    return m_diagnostic;
+    return m_diagnostics;
 }
 
 void DiagnosticBag::print(std::ostream& out) const
 {
-    for (const auto& [severity, message, range] : m_diagnostic)
+    for (const auto& [severity, message, range] : m_diagnostics)
     {
         out << severityLabel(severity);
 
@@ -60,6 +61,6 @@ void DiagnosticBag::print(std::ostream& out) const
 
 void DiagnosticBag::clear() noexcept
 {
-    m_diagnostic.clear();
+    m_diagnostics.clear();
 }
 } // namespace asmstudio

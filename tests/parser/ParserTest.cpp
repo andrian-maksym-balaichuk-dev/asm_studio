@@ -7,7 +7,10 @@ using namespace asmstudio::parser;
 
 TEST(Parser, EmptyInput)
 {
+    // Given / When
     auto prog = asm_parse_runtime("");
+
+    // Then
     EXPECT_TRUE(prog.ok());
     EXPECT_EQ(prog.instructionCount(), 0u);
 }
@@ -76,9 +79,27 @@ TEST(Parser, ConditionalJumps)
     EXPECT_TRUE(prog.ok());
 }
 
-// ---------------------------------------------------------------------------
-// Compile-time parser tests (consteval)
-// ---------------------------------------------------------------------------
+TEST(Parser, MissingOperandAfterCommaProducesDiagnostic)
+{
+    // Given / When
+    const auto program = asm_parse_runtime("mov r0,\nret");
+
+    // Then
+    EXPECT_FALSE(program.ok());
+    EXPECT_GT(program.diagCount(), 0u);
+}
+
+TEST(Parser, MissingNewlineAfterInstructionProducesDiagnostic)
+{
+    const auto program = asm_parse_runtime("mov r0, 0 ret");
+    EXPECT_TRUE(program.diagCount() > 0u);
+}
+
+TEST(Parser, UnexpectedTokenProducesDiagnostic)
+{
+    const auto program = asm_parse_runtime("@");
+    EXPECT_TRUE(program.diagCount() > 0u);
+}
 
 TEST(Parser, ConstexprSingleRet)
 {
@@ -103,4 +124,22 @@ TEST(Parser, ConstexprWithLabel)
     static_assert(prog.ok());
     static_assert(prog.labelCount() == 1u);
     EXPECT_EQ(prog.labelCount(), 1u);
+}
+
+TEST(Parser, ParsedProgramHelpersTrackManualState)
+{
+    // Given
+    ParsedProgram program{};
+
+    // When
+    program.addInstruction("mov", "r0", "1", 4);
+    program.addLabel("loop", 0);
+    program.addDiagnostic("warning", 4, 1, false);
+    program.addDiagnostic("error", 5, 2, true);
+
+    // Then
+    EXPECT_EQ(program.instructionCount(), 1u);
+    EXPECT_EQ(program.labelCount(), 1u);
+    EXPECT_EQ(program.diagCount(), 2u);
+    EXPECT_FALSE(program.ok());
 }

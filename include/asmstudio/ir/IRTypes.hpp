@@ -1,9 +1,9 @@
 #ifndef ASMSTUDIO_IR_IRTYPES_HPP
 #define ASMSTUDIO_IR_IRTYPES_HPP
 
+
 #include <asmstudio/core/Types.hpp>
 
-#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -39,6 +39,54 @@ enum class IROp
     Store,  // inputs = [addr, value]
 };
 
+[[nodiscard]] constexpr std::string_view irOpName(IROp opcode) noexcept
+{
+    switch (opcode)
+    {
+    case IROp::Const: return "const";
+    case IROp::Copy: return "copy";
+    case IROp::Add: return "add";
+    case IROp::Sub: return "sub";
+    case IROp::Mul: return "mul";
+    case IROp::Div: return "div";
+    case IROp::Mod: return "mod";
+    case IROp::And: return "and";
+    case IROp::Or: return "or";
+    case IROp::Xor: return "xor";
+    case IROp::Shl: return "shl";
+    case IROp::Shr: return "shr";
+    case IROp::Neg: return "neg";
+    case IROp::Not: return "not";
+    case IROp::Cmp: return "cmp";
+    case IROp::Jmp: return "jmp";
+    case IROp::BrTrue: return "brtrue";
+    case IROp::Call: return "call";
+    case IROp::Ret: return "ret";
+    case IROp::Load: return "load";
+    case IROp::Store: return "store";
+    }
+    return "?";
+}
+
+[[nodiscard]] constexpr bool isArithmeticOp(IROp opcode) noexcept
+{
+    switch (opcode)
+    {
+    case IROp::Add:
+    case IROp::Sub:
+    case IROp::Mul:
+    case IROp::Div:
+    case IROp::Mod:
+    case IROp::Neg:
+    case IROp::And:
+    case IROp::Or:
+    case IROp::Xor:
+    case IROp::Shl:
+    case IROp::Shr: return true;
+    default: return false;
+    }
+}
+
 struct IRValue
 {
     DataType type{ DataType::Void };
@@ -55,6 +103,21 @@ struct IRInstr
     std::optional<std::string> callee;  // for Call
     std::optional<CmpKind> cmpKind;     // for Cmp
     std::optional<IRConstant> constVal; // for Const — mirrors IRValue::constant
+
+    [[nodiscard]] constexpr std::string_view opName() const noexcept
+    {
+        return irOpName(op);
+    }
+
+    [[nodiscard]] constexpr bool isArithmetic() const noexcept
+    {
+        return isArithmeticOp(op);
+    }
+
+    [[nodiscard]] constexpr bool isTerminator() const noexcept
+    {
+        return op == IROp::Jmp || op == IROp::BrTrue || op == IROp::Ret;
+    }
 };
 
 struct IRBlock
@@ -62,6 +125,11 @@ struct IRBlock
     std::string name;
     BlockId id;
     std::vector<IRInstr> instrs;
+
+    [[nodiscard]] bool empty() const noexcept
+    {
+        return instrs.empty();
+    }
 };
 
 struct IRFunction
@@ -69,12 +137,70 @@ struct IRFunction
     std::string name;
     std::vector<IRBlock> blocks;
     std::vector<IRValue> values; // indexed by ValueId::value
+
+    [[nodiscard]] const IRBlock* entryBlock() const noexcept
+    {
+        return blocks.empty() ? nullptr : &blocks.front();
+    }
+
+    [[nodiscard]] IRBlock* entryBlock() noexcept
+    {
+        return blocks.empty() ? nullptr : &blocks.front();
+    }
+
+    [[nodiscard]] const IRBlock* findBlock(BlockId blockId) const noexcept
+    {
+        for (const auto& block : blocks)
+        {
+            if (block.id == blockId)
+            {
+                return &block;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] IRBlock* findBlock(BlockId blockId) noexcept
+    {
+        for (auto& block : blocks)
+        {
+            if (block.id == blockId)
+            {
+                return &block;
+            }
+        }
+        return nullptr;
+    }
 };
 
 struct IRModule
 {
     std::string name;
     std::vector<IRFunction> functions;
+
+    [[nodiscard]] const IRFunction* findFunction(std::string_view functionName) const noexcept
+    {
+        for (const auto& function : functions)
+        {
+            if (function.name == functionName)
+            {
+                return &function;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] IRFunction* findFunction(std::string_view functionName) noexcept
+    {
+        for (auto& function : functions)
+        {
+            if (function.name == functionName)
+            {
+                return &function;
+            }
+        }
+        return nullptr;
+    }
 };
 
 struct ValueIdHash

@@ -1,6 +1,8 @@
 #ifndef ASMSTUDIO_OPTIMIZER_OPTIMIZER_HPP
 #define ASMSTUDIO_OPTIMIZER_OPTIMIZER_HPP
 
+
+#include <asmstudio/core/Compat.hpp>
 #include <asmstudio/core/Types.hpp>
 #include <asmstudio/ir/IRTypes.hpp>
 #include <asmstudio/optimizer/PassBase.hpp>
@@ -21,15 +23,28 @@ struct PassEntry
 class Optimizer
 {
 public:
+    // Register an optimisation pass. Constrained by Pass concept (C++20)
+    // or IsPassV trait (C++17).
+#ifdef ASM_CXX20
     template <Pass P>
     void addPass(P pass)
     {
-        m_passes.push_back(
-            { std::string(pass.name()), [p = std::move(pass)](IRFunction& fn) mutable { return p.run(fn); } });
+        m_passes.push_back({ std::string{ pass.name() }, [passImpl = std::move(pass)](IRFunction& function) mutable {
+                                return passImpl.run(function);
+                            } });
     }
+#else
+    template <typename P, typename = std::enable_if_t<IsPassV<P> > >
+    void addPass(P pass)
+    {
+        m_passes.push_back({ std::string{ pass.name() }, [passImpl = std::move(pass)](IRFunction& function) mutable {
+                                return passImpl.run(function);
+                            } });
+    }
+#endif
 
-    bool run(IRFunction& fn) const;
-    bool run(IRModule& module) const;
+    [[nodiscard]] bool run(IRFunction& function) const;
+    [[nodiscard]] bool run(IRModule& module) const;
 
     void setLevel(OptimizationLevel level);
 
@@ -42,48 +57,41 @@ private:
     std::vector<PassEntry> m_passes;
 };
 
-// ---------------------------------------------------------------------------
-// Built-in passes — satisfy the Pass concept.
-// ---------------------------------------------------------------------------
-
 struct ConstantFolding
 {
     [[nodiscard]] static constexpr std::string_view name() noexcept
     {
         return "constant-folding";
     }
-    bool run(IRFunction& fn) const;
+    [[nodiscard]] bool run(IRFunction& function) const;
 };
-
 struct DeadCodeElim
 {
     [[nodiscard]] static constexpr std::string_view name() noexcept
     {
         return "dead-code-elim";
     }
-    bool run(IRFunction& fn) const;
+    [[nodiscard]] bool run(IRFunction& function) const;
 };
-
 struct UnreachableBlockElim
 {
     [[nodiscard]] static constexpr std::string_view name() noexcept
     {
         return "unreachable-block-elim";
     }
-    bool run(IRFunction& fn) const;
+    [[nodiscard]] bool run(IRFunction& function) const;
 };
-
 struct JumpSimplification
 {
     [[nodiscard]] static constexpr std::string_view name() noexcept
     {
         return "jump-simplification";
     }
-    bool run(IRFunction& fn) const;
+    [[nodiscard]] bool run(IRFunction& function) const;
 };
 
 [[nodiscard]] Optimizer makeOptimizer(OptimizationLevel level);
-} // namespace asmstudio
 
+} // namespace asmstudio
 
 #endif // ASMSTUDIO_OPTIMIZER_OPTIMIZER_HPP

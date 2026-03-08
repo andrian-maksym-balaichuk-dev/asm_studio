@@ -1,6 +1,7 @@
 #ifndef ASMSTUDIO_CORE_SOURCELOCATION_HPP
 #define ASMSTUDIO_CORE_SOURCELOCATION_HPP
 
+
 #include <cstdint>
 #include <string_view>
 

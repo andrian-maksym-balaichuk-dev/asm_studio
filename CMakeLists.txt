@@ -3,13 +3,29 @@ cmake_minimum_required(VERSION 3.20)
 project(
     asm_studio
     VERSION 0.1.0
-    DESCRIPTION "C++23 compile-time-aware assembler studio."
+    DESCRIPTION "C++ compile-time-aware assembler studio."
     LANGUAGES CXX
 )
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-set(CMAKE_CXX_STANDARD 23)
+# ---------------------------------------------------------------------------
+# C++ standard selection — supports 17, 20, or 23.
+# ---------------------------------------------------------------------------
+get_property(ASM_CXX_STANDARD_CACHE_TYPE CACHE ASM_CXX_STANDARD PROPERTY TYPE)
+if(ASM_CXX_STANDARD_CACHE_TYPE STREQUAL "BOOL")
+    set(ASM_CXX_STANDARD_MIGRATED_VALUE "${ASM_CXX_STANDARD}")
+    if(NOT ASM_CXX_STANDARD_MIGRATED_VALUE MATCHES "^(17|20|23)$")
+        set(ASM_CXX_STANDARD_MIGRATED_VALUE "23")
+    endif()
+    unset(ASM_CXX_STANDARD CACHE)
+    set(ASM_CXX_STANDARD "${ASM_CXX_STANDARD_MIGRATED_VALUE}" CACHE STRING "Target C++ standard (17, 20, 23)")
+endif()
+set(ASM_CXX_STANDARD "23" CACHE STRING "Target C++ standard (17, 20, 23)")
+if(NOT ASM_CXX_STANDARD MATCHES "^(17|20|23)$")
+    message(FATAL_ERROR "ASM_CXX_STANDARD must be 17, 20, or 23. Got: ${ASM_CXX_STANDARD}")
+endif()
+set(CMAKE_CXX_STANDARD ${ASM_CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -46,8 +62,14 @@ add_library(asm_studio_lib STATIC
     ${ASM_SRC_DIR}/api/Variable.cpp
     ${ASM_SRC_DIR}/lowering/Lowering.cpp
     ${ASM_SRC_DIR}/backend/PseudoEmitter.cpp
+    ${ASM_SRC_DIR}/backend/Arm64Emitter.cpp
+    ${ASM_SRC_DIR}/presentation/ConsolePresenter.cpp
     ${ASM_SRC_DIR}/simulator/Simulator.cpp
     ${ASM_SRC_DIR}/optimizer/Optimizer.cpp
+    ${ASM_SRC_DIR}/optimizer/passes/ConstantFoldingPass.cpp
+    ${ASM_SRC_DIR}/optimizer/passes/DeadCodeEliminationPass.cpp
+    ${ASM_SRC_DIR}/optimizer/passes/UnreachableBlockEliminationPass.cpp
+    ${ASM_SRC_DIR}/optimizer/passes/JumpSimplificationPass.cpp
     ${ASM_SRC_DIR}/visualization/CfgDot.cpp
     ${ASM_SRC_DIR}/explain/Explain.cpp
 )
@@ -56,7 +78,7 @@ add_library(asm::studio ALIAS asm_studio_lib)
 target_include_directories(asm_studio_lib PUBLIC
     $<BUILD_INTERFACE:${ASM_INCLUDE_DIR}>
 )
-target_compile_features(asm_studio_lib PUBLIC cxx_std_23)
+target_compile_features(asm_studio_lib PUBLIC cxx_std_${ASM_CXX_STANDARD})
 target_compile_options(asm_studio_lib PRIVATE ${ASM_WARNING_FLAGS})
 set_target_properties(
     asm_studio_lib
@@ -110,7 +132,7 @@ if(ASM_BUILD_TESTS AND BUILD_TESTING)
     function(asm_add_test_executable target_name source_path)
         add_executable(${target_name} ${source_path})
         target_link_libraries(${target_name} PRIVATE asm::studio GTest::gtest_main)
-        target_compile_features(${target_name} PRIVATE cxx_std_23)
+        target_compile_features(${target_name} PRIVATE cxx_std_${ASM_CXX_STANDARD})
         target_compile_options(${target_name} PRIVATE ${ASM_WARNING_FLAGS})
         set_target_properties(
             ${target_name}
@@ -136,6 +158,8 @@ if(ASM_BUILD_TESTS AND BUILD_TESTING)
     asm_add_test_executable(asm_parser_tests    ${ASM_TEST_DIR}/parser/ParserTest.cpp)
     asm_add_test_executable(asm_sim_tests       ${ASM_TEST_DIR}/simulator/SimulatorTest.cpp)
     asm_add_test_executable(asm_opt_tests       ${ASM_TEST_DIR}/optimizer/OptimizerTest.cpp)
+    asm_add_test_executable(asm_tool_tests      ${ASM_TEST_DIR}/tooling/ToolingTest.cpp)
+    asm_add_test_executable(asm_types_tests     ${ASM_TEST_DIR}/core/TypesTest.cpp)
 
     # Aggregate binary: all test sources compiled together.
     add_executable(asm_all_tests
@@ -148,9 +172,11 @@ if(ASM_BUILD_TESTS AND BUILD_TESTING)
         ${ASM_TEST_DIR}/parser/ParserTest.cpp
         ${ASM_TEST_DIR}/simulator/SimulatorTest.cpp
         ${ASM_TEST_DIR}/optimizer/OptimizerTest.cpp
+        ${ASM_TEST_DIR}/tooling/ToolingTest.cpp
+        ${ASM_TEST_DIR}/core/TypesTest.cpp
     )
     target_link_libraries(asm_all_tests PRIVATE asm::studio GTest::gtest_main)
-    target_compile_features(asm_all_tests PRIVATE cxx_std_23)
+    target_compile_features(asm_all_tests PRIVATE cxx_std_${ASM_CXX_STANDARD})
     target_compile_options(asm_all_tests PRIVATE ${ASM_WARNING_FLAGS})
     set_target_properties(
         asm_all_tests

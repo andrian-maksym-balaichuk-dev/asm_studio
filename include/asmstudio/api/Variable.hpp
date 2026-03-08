@@ -1,6 +1,7 @@
 #ifndef ASMSTUDIO_API_VARIABLE_HPP
 #define ASMSTUDIO_API_VARIABLE_HPP
 
+
 #include <asmstudio/api/Condition.hpp>
 #include <asmstudio/core/Types.hpp>
 
@@ -13,58 +14,56 @@ namespace asmstudio
 {
 using InitValue = std::variant<std::int64_t, std::uint64_t, double, bool>;
 
-inline Operand toOperand(const Variable& v)
+inline Operand toOperand(const Variable& variable)
 {
-    return std::cref(v);
+    return std::cref(variable);
 }
 template <typename T>
-inline Operand toOperand(T v)
+inline Operand toOperand(T value)
 {
-    return Operand{ v };
+    return Operand{ value };
 }
 
 class Variable
 {
 public:
-    Variable(std::string name, DataType type, InitValue init);
+    Variable(std::string name, DataType type, InitValue initialValue);
 
-    // Variable properties.
     [[nodiscard]] std::string_view name() const noexcept;
     [[nodiscard]] DataType type() const noexcept;
     [[nodiscard]] const InitValue& initVariant() const noexcept;
 
-    // Single compare entry-point; operators delegate here.
-    [[nodiscard]] Condition compare(CmpKind kind, Operand rhs) const;
+    [[nodiscard]] Condition compare(CmpKind comparisonKind, Operand rightOperand) const;
 
     template <typename T>
-    [[nodiscard]] Condition operator<(const T& rhs) const
+    [[nodiscard]] Condition operator<(const T& rightOperand) const
     {
-        return compare(CmpKind::Lt, toOperand(rhs));
+        return compare(CmpKind::Lt, toOperand(rightOperand));
     }
     template <typename T>
-    [[nodiscard]] Condition operator<=(const T& rhs) const
+    [[nodiscard]] Condition operator<=(const T& rightOperand) const
     {
-        return compare(CmpKind::Le, toOperand(rhs));
+        return compare(CmpKind::Le, toOperand(rightOperand));
     }
     template <typename T>
-    [[nodiscard]] Condition operator==(const T& rhs) const
+    [[nodiscard]] Condition operator==(const T& rightOperand) const
     {
-        return compare(CmpKind::Eq, toOperand(rhs));
+        return compare(CmpKind::Eq, toOperand(rightOperand));
     }
     template <typename T>
-    [[nodiscard]] Condition operator!=(const T& rhs) const
+    [[nodiscard]] Condition operator!=(const T& rightOperand) const
     {
-        return compare(CmpKind::Ne, toOperand(rhs));
+        return compare(CmpKind::Ne, toOperand(rightOperand));
     }
     template <typename T>
-    [[nodiscard]] Condition operator>=(const T& rhs) const
+    [[nodiscard]] Condition operator>=(const T& rightOperand) const
     {
-        return compare(CmpKind::Ge, toOperand(rhs));
+        return compare(CmpKind::Ge, toOperand(rightOperand));
     }
     template <typename T>
-    [[nodiscard]] Condition operator>(const T& rhs) const
+    [[nodiscard]] Condition operator>(const T& rightOperand) const
     {
-        return compare(CmpKind::Gt, toOperand(rhs));
+        return compare(CmpKind::Gt, toOperand(rightOperand));
     }
 
 private:

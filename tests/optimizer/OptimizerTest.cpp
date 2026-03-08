@@ -27,6 +27,7 @@ static void addInstr(IRFunction& fn, std::size_t blkIdx, IRInstr instr)
 
 TEST(Optimizer, ConstFoldAdd)
 {
+    // Given
     IRFunction fn = makeSimpleFn("cf_add");
 
     // v0 = const 3, v1 = const 4, v2 = add v0, v1
@@ -51,8 +52,11 @@ TEST(Optimizer, ConstFoldAdd)
     addInstr(fn, 0, c1);
     addInstr(fn, 0, add);
 
+    // When
     ConstantFolding cf;
     bool changed = cf.run(fn);
+
+    // Then
     EXPECT_TRUE(changed);
     EXPECT_TRUE(fn.values[v2.value].constant.has_value());
     EXPECT_EQ(std::get<int64_t>(*fn.values[v2.value].constant), 7);
@@ -87,6 +91,25 @@ TEST(Optimizer, ConstFoldNoDivByZero)
     bool changed = cf.run(fn);
     // Div by zero should NOT be folded.
     EXPECT_FALSE(changed);
+}
+
+TEST(Optimizer, ConstFoldComparisonAndBitwiseOps)
+{
+    IRFunction fn = makeSimpleFn("cf_cmp");
+
+    ValueId leftValue = addValue(fn, DataType::Int64, IRConstant{ int64_t(6) });
+    ValueId rightValue = addValue(fn, DataType::Int64, IRConstant{ int64_t(3) });
+    ValueId cmpValue = addValue(fn, DataType::Bool);
+    ValueId orValue = addValue(fn, DataType::Int64);
+
+    addInstr(fn, 0, IRInstr{ IROp::Cmp, { leftValue, rightValue }, cmpValue, {}, {}, {}, CmpKind::Ge, {} });
+    addInstr(fn, 0, IRInstr{ IROp::Or, { leftValue, rightValue }, orValue, {}, {}, {}, {}, {} });
+
+    ConstantFolding cf;
+    const bool changed = cf.run(fn);
+    EXPECT_TRUE(changed);
+    EXPECT_TRUE(std::get<bool>(*fn.values[cmpValue.value].constant));
+    EXPECT_EQ(std::get<int64_t>(*fn.values[orValue.value].constant), 7);
 }
 
 TEST(Optimizer, DCERemovesUnused)
@@ -193,6 +216,51 @@ TEST(Optimizer, JumpSimplificationFoldsTrue)
     EXPECT_EQ(br2.trueTarget, BlockId{ 1 });
 }
 
+TEST(Optimizer, JumpSimplificationFoldsFalseAndClearsElseEdge)
+{
+    // Given
+    IRFunction fn = makeSimpleFn("js_false");
+    fn.blocks.push_back(IRBlock{ "then", BlockId{ 1 }, {} });
+    fn.blocks.push_back(IRBlock{ "else_", BlockId{ 2 }, {} });
+
+    ValueId valueId = addValue(fn, DataType::Bool, IRConstant{ bool(false) });
+    addInstr(fn, 0, IRInstr{ IROp::BrTrue, { valueId }, {}, BlockId{ 1 }, BlockId{ 2 }, {}, {}, {} });
+
+    // When
+    JumpSimplification simplification;
+    const bool changed = simplification.run(fn);
+
+    // Then
+    ASSERT_TRUE(changed);
+
+    const IRInstr& instruction = fn.blocks[0].instrs.front();
+    EXPECT_EQ(instruction.op, IROp::Jmp);
+    EXPECT_EQ(instruction.trueTarget, BlockId{ 2 });
+    EXPECT_FALSE(instruction.falseTarget.has_value());
+    EXPECT_TRUE(instruction.inputs.empty());
+}
+
+TEST(Optimizer, ModuleRunAggregatesFunctionChanges)
+{
+    // Given
+    IRFunction fn = makeSimpleFn("module_fn");
+    ValueId leftValue = addValue(fn, DataType::Int64, IRConstant{ int64_t(1) });
+    ValueId rightValue = addValue(fn, DataType::Int64, IRConstant{ int64_t(2) });
+    ValueId sumValue = addValue(fn, DataType::Int64);
+    addInstr(fn, 0, IRInstr{ IROp::Add, { leftValue, rightValue }, sumValue, {}, {}, {}, {}, {} });
+
+    IRModule module{};
+    module.name = "module";
+    module.functions.push_back(std::move(fn));
+
+    // When
+    Optimizer optimizer = makeOptimizer(OptimizationLevel::Basic);
+
+    // Then
+    EXPECT_TRUE(optimizer.run(module));
+    EXPECT_TRUE(module.functions.front().values[sumValue.value].constant.has_value());
+}
+
 TEST(Optimizer, LevelNoneHasNoPasses)
 {
     auto opt = makeOptimizer(OptimizationLevel::None);
@@ -210,4 +278,11 @@ TEST(Optimizer, LevelAggressiveHasMorePasses)
     auto basic = makeOptimizer(OptimizationLevel::Basic);
     auto aggr = makeOptimizer(OptimizationLevel::Aggressive);
     EXPECT_GE(aggr.passCount(), basic.passCount());
+}
+
+TEST(Optimizer, LevelExperimentalMatchesAggressivePipelineShape)
+{
+    auto aggressive = makeOptimizer(OptimizationLevel::Aggressive);
+    auto experimental = makeOptimizer(OptimizationLevel::Experimental);
+    EXPECT_EQ(experimental.passCount(), aggressive.passCount());
 }

@@ -1,6 +1,7 @@
 #ifndef ASMSTUDIO_API_STMT_HPP
 #define ASMSTUDIO_API_STMT_HPP
 
+
 #include <asmstudio/api/Condition.hpp>
 #include <asmstudio/api/Expr.hpp>
 
@@ -23,12 +24,12 @@ struct AssignStmt
 };
 struct WhileStmt
 {
-    Condition cond;
+    Condition condition;
     std::vector<Stmt> body;
 };
 struct IfStmt
 {
-    Condition cond;
+    Condition condition;
     std::vector<Stmt> thenBody;
     std::vector<Stmt> elseBody;
 };
@@ -39,29 +40,37 @@ struct ReturnStmt
 struct CallStmt
 {
     std::string callee;
-    std::vector<ExprNode> args;
+    std::vector<ExprNode> arguments;
 };
 
 class Stmt
 {
 public:
-    using V = std::variant<AssignStmt, WhileStmt, IfStmt, ReturnStmt, CallStmt>;
+    using Variant = std::variant<AssignStmt, WhileStmt, IfStmt, ReturnStmt, CallStmt>;
 
     template <typename T>
-    explicit Stmt(T t) : m_impl(std::make_shared<V>(std::move(t)))
+    explicit Stmt(T statement) : m_impl{ std::make_shared<Variant>(std::move(statement)) }
     {}
 
-    [[nodiscard]] const V& var() const noexcept
+    [[nodiscard]] const Variant& variant() const noexcept
     {
         return *m_impl;
     }
-    [[nodiscard]] V& var() noexcept
+    [[nodiscard]] Variant& variant() noexcept
     {
         return *m_impl;
+    }
+    [[nodiscard]] const Variant& var() const noexcept
+    {
+        return variant();
+    }
+    [[nodiscard]] Variant& var() noexcept
+    {
+        return variant();
     }
 
 private:
-    std::shared_ptr<V> m_impl;
+    std::shared_ptr<Variant> m_impl;
 };
 } // namespace asmstudio
 

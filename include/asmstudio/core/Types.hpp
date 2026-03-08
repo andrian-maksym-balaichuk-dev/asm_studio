@@ -2,6 +2,7 @@
 #define ASMSTUDIO_CORE_TYPES_HPP
 
 
+#include <asmstudio/core/Compat.hpp>
 #include <cstdint>
 #include <string_view>
 
@@ -10,22 +11,82 @@ namespace asmstudio
 struct RegisterId
 {
     std::uint16_t value{};
+#ifdef ASM_CXX20
     auto operator<=>(const RegisterId&) const noexcept = default;
+#else
+    [[nodiscard]] bool operator==(const RegisterId& other) const noexcept
+    {
+        return value == other.value;
+    }
+    [[nodiscard]] bool operator!=(const RegisterId& other) const noexcept
+    {
+        return !(*this == other);
+    }
+    [[nodiscard]] bool operator<(const RegisterId& other) const noexcept
+    {
+        return value < other.value;
+    }
+#endif
 };
 struct BlockId
 {
     std::uint32_t value{};
+#ifdef ASM_CXX20
     auto operator<=>(const BlockId&) const noexcept = default;
+#else
+    [[nodiscard]] bool operator==(const BlockId& other) const noexcept
+    {
+        return value == other.value;
+    }
+    [[nodiscard]] bool operator!=(const BlockId& other) const noexcept
+    {
+        return !(*this == other);
+    }
+    [[nodiscard]] bool operator<(const BlockId& other) const noexcept
+    {
+        return value < other.value;
+    }
+#endif
 };
 struct ValueId
 {
     std::uint32_t value{};
+#ifdef ASM_CXX20
     auto operator<=>(const ValueId&) const noexcept = default;
+#else
+    [[nodiscard]] bool operator==(const ValueId& other) const noexcept
+    {
+        return value == other.value;
+    }
+    [[nodiscard]] bool operator!=(const ValueId& other) const noexcept
+    {
+        return !(*this == other);
+    }
+    [[nodiscard]] bool operator<(const ValueId& other) const noexcept
+    {
+        return value < other.value;
+    }
+#endif
 };
 struct InstrId
 {
     std::uint32_t value{};
+#ifdef ASM_CXX20
     auto operator<=>(const InstrId&) const noexcept = default;
+#else
+    [[nodiscard]] bool operator==(const InstrId& other) const noexcept
+    {
+        return value == other.value;
+    }
+    [[nodiscard]] bool operator!=(const InstrId& other) const noexcept
+    {
+        return !(*this == other);
+    }
+    [[nodiscard]] bool operator<(const InstrId& other) const noexcept
+    {
+        return value < other.value;
+    }
+#endif
 };
 
 // ---------------------------------------------------------------------------

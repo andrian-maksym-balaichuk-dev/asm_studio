@@ -1,6 +1,8 @@
 #ifndef ASMSTUDIO_PARSER_ASM_PARSE_HPP
 #define ASMSTUDIO_PARSER_ASM_PARSE_HPP
 
+
+#include <asmstudio/core/Compat.hpp>
 #include <asmstudio/parser/AsmProgram.hpp>
 #include <asmstudio/parser/Parser.hpp>
 
@@ -10,6 +12,9 @@
 
 namespace asmstudio
 {
+// in c++20 and later, we can use a fixed-size string literal wrapper to allow passing string literals as non-type
+// template parameters to asm_parse<Src>() for compile-time parsing and validation of embedded assembly code.
+#ifdef ASM_CXX20
 template <std::size_t N>
 struct FixedString
 {
@@ -42,6 +47,8 @@ template <FixedString Src>
 {
     return parser::parse(Src.view());
 }
+#endif
+
 [[nodiscard]] inline parser::ParsedProgram asm_parse_runtime(std::string_view src)
 {
     return parser::parse(src);

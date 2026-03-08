@@ -15,15 +15,15 @@ inline constexpr std::size_t MaxDiagnostics = 16;
 struct ParsedInstruction
 {
     std::string_view mnemonic;
-    std::string_view op1;
-    std::string_view op2;
+    std::string_view firstOperand;
+    std::string_view secondOperand;
     std::uint32_t line{};
 };
 
 struct ParsedLabel
 {
     std::string_view name;
-    std::uint32_t instrIndex{}; // index of first instr after the label
+    std::uint32_t instructionIndex{}; // index of first instruction after the label
 };
 
 struct ParseDiagnostic
@@ -39,15 +39,15 @@ struct ParsedProgram
     std::array<ParsedInstruction, MaxInstructions> instructions{};
     std::array<ParsedLabel, MaxLabels> labels{};
     std::array<ParseDiagnostic, MaxDiagnostics> diagnostics{};
-    std::size_t instrCount_{};
-    std::size_t labelCount_{};
-    std::size_t diagCount_{};
+    std::size_t instructionCountValue{};
+    std::size_t labelCountValue{};
+    std::size_t diagnosticCountValue{};
 
     [[nodiscard]] constexpr bool ok() const noexcept
     {
-        for (std::size_t i = 0; i < diagCount_; ++i)
+        for (std::size_t diagnosticIndex{ 0 }; diagnosticIndex < diagnosticCountValue; ++diagnosticIndex)
         {
-            if (diagnostics[i].isError)
+            if (diagnostics[diagnosticIndex].isError)
             {
                 return false;
             }
@@ -57,38 +57,39 @@ struct ParsedProgram
 
     [[nodiscard]] constexpr std::size_t instructionCount() const noexcept
     {
-        return instrCount_;
+        return instructionCountValue;
     }
     [[nodiscard]] constexpr std::size_t labelCount() const noexcept
     {
-        return labelCount_;
+        return labelCountValue;
     }
     [[nodiscard]] constexpr std::size_t diagCount() const noexcept
     {
-        return diagCount_;
+        return diagnosticCountValue;
     }
 
-    constexpr void addInstruction(std::string_view mnemonic, std::string_view op1, std::string_view op2, const std::uint32_t line)
+    constexpr void
+    addInstruction(std::string_view mnemonic, std::string_view firstOperand, std::string_view secondOperand, const std::uint32_t line)
     {
-        if (instrCount_ < MaxInstructions)
+        if (instructionCountValue < MaxInstructions)
         {
-            instructions[instrCount_++] = { mnemonic, op1, op2, line };
+            instructions[instructionCountValue++] = { mnemonic, firstOperand, secondOperand, line };
         }
     }
 
-    constexpr void addLabel(std::string_view name, const std::uint32_t instrIdx)
+    constexpr void addLabel(std::string_view name, const std::uint32_t instructionIndex)
     {
-        if (labelCount_ < MaxLabels)
+        if (labelCountValue < MaxLabels)
         {
-            labels[labelCount_++] = { name, instrIdx };
+            labels[labelCountValue++] = { name, instructionIndex };
         }
     }
 
-    constexpr void addDiagnostic(std::string_view msg, std::uint32_t line, const std::uint32_t col, const bool isError)
+    constexpr void addDiagnostic(std::string_view message, std::uint32_t line, const std::uint32_t col, const bool isError)
     {
-        if (diagCount_ < MaxDiagnostics)
+        if (diagnosticCountValue < MaxDiagnostics)
         {
-            diagnostics[diagCount_++] = { msg, line, col, isError };
+            diagnostics[diagnosticCountValue++] = { message, line, col, isError };
         }
     }
 };
