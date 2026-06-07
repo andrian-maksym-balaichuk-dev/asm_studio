@@ -34,8 +34,8 @@ option(ASM_BUILD_TESTS "Build the asm_studio test suite." ${PROJECT_IS_TOP_LEVEL
 option(ASM_ENABLE_SANITIZERS "Enable AddressSanitizer and UBSan in debug builds." ON)
 
 set(ASM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
-set(ASM_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(ASM_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set(ASM_SRC_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(ASM_TEST_DIR    "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 
 # Compiler warning flags (applied to our targets only).
 set(ASM_WARNING_FLAGS
@@ -56,22 +56,30 @@ set(ASM_SANITIZER_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
 # Tests and the executable both link against this.
 # ---------------------------------------------------------------------------
 add_library(asm_studio_lib STATIC
-    ${ASM_SRC_DIR}/core/Diagnostic.cpp
-    ${ASM_SRC_DIR}/api/Program.cpp
-    ${ASM_SRC_DIR}/api/Function.cpp
-    ${ASM_SRC_DIR}/api/Variable.cpp
-    ${ASM_SRC_DIR}/lowering/Lowering.cpp
-    ${ASM_SRC_DIR}/backend/PseudoEmitter.cpp
-    ${ASM_SRC_DIR}/backend/Arm64Emitter.cpp
-    ${ASM_SRC_DIR}/presentation/ConsolePresenter.cpp
-    ${ASM_SRC_DIR}/simulator/Simulator.cpp
-    ${ASM_SRC_DIR}/optimizer/Optimizer.cpp
-    ${ASM_SRC_DIR}/optimizer/passes/ConstantFoldingPass.cpp
-    ${ASM_SRC_DIR}/optimizer/passes/DeadCodeEliminationPass.cpp
-    ${ASM_SRC_DIR}/optimizer/passes/UnreachableBlockEliminationPass.cpp
-    ${ASM_SRC_DIR}/optimizer/passes/JumpSimplificationPass.cpp
-    ${ASM_SRC_DIR}/visualization/CfgDot.cpp
-    ${ASM_SRC_DIR}/explain/Explain.cpp
+    # support — utilities and diagnostics
+    ${ASM_SRC_DIR}/support/Diagnostic.cpp
+    # dsl — C++ builder API
+    ${ASM_SRC_DIR}/dsl/Program.cpp
+    ${ASM_SRC_DIR}/dsl/Function.cpp
+    ${ASM_SRC_DIR}/dsl/Variable.cpp
+    # ir — types and lowering
+    ${ASM_SRC_DIR}/ir/Lowering.cpp
+    # transforms — optimizer and passes
+    ${ASM_SRC_DIR}/transforms/Optimizer.cpp
+    ${ASM_SRC_DIR}/transforms/passes/ConstantFoldingPass.cpp
+    ${ASM_SRC_DIR}/transforms/passes/DeadCodeEliminationPass.cpp
+    ${ASM_SRC_DIR}/transforms/passes/UnreachableBlockEliminationPass.cpp
+    ${ASM_SRC_DIR}/transforms/passes/JumpSimplificationPass.cpp
+    # codegen — backend emitters
+    ${ASM_SRC_DIR}/codegen/PseudoEmitter.cpp
+    ${ASM_SRC_DIR}/codegen/Arm64Emitter.cpp
+    # sim — step-based IR interpreter
+    ${ASM_SRC_DIR}/sim/Simulator.cpp
+    # analysis — IR analysis and graph tools
+    ${ASM_SRC_DIR}/analysis/Explain.cpp
+    ${ASM_SRC_DIR}/analysis/CfgDot.cpp
+    # driver — CLI presentation layer
+    ${ASM_SRC_DIR}/driver/ConsolePresenter.cpp
 )
 add_library(asm::studio ALIAS asm_studio_lib)
 
@@ -149,31 +157,31 @@ if(ASM_BUILD_TESTS AND BUILD_TESTING)
         set(ASM_TEST_TARGETS "${ASM_TEST_TARGETS}" PARENT_SCOPE)
     endfunction()
 
-    asm_add_test_executable(asm_core_tests      ${ASM_TEST_DIR}/core/DiagnosticTest.cpp)
-    asm_add_test_executable(asm_api_tests       ${ASM_TEST_DIR}/api/ProgramApiTest.cpp)
-    asm_add_test_executable(asm_condition_tests ${ASM_TEST_DIR}/api/ConditionTest.cpp)
-    asm_add_test_executable(asm_expr_stmt_tests ${ASM_TEST_DIR}/api/ExprStmtTest.cpp)
+    asm_add_test_executable(asm_support_tests   ${ASM_TEST_DIR}/support/DiagnosticTest.cpp)
+    asm_add_test_executable(asm_types_tests     ${ASM_TEST_DIR}/support/TypesTest.cpp)
+    asm_add_test_executable(asm_dsl_tests       ${ASM_TEST_DIR}/dsl/ProgramApiTest.cpp)
+    asm_add_test_executable(asm_condition_tests ${ASM_TEST_DIR}/dsl/ConditionTest.cpp)
+    asm_add_test_executable(asm_expr_stmt_tests ${ASM_TEST_DIR}/dsl/ExprStmtTest.cpp)
     asm_add_test_executable(asm_ir_tests        ${ASM_TEST_DIR}/ir/IRTest.cpp)
-    asm_add_test_executable(asm_lexer_tests     ${ASM_TEST_DIR}/parser/LexerTest.cpp)
-    asm_add_test_executable(asm_parser_tests    ${ASM_TEST_DIR}/parser/ParserTest.cpp)
-    asm_add_test_executable(asm_sim_tests       ${ASM_TEST_DIR}/simulator/SimulatorTest.cpp)
-    asm_add_test_executable(asm_opt_tests       ${ASM_TEST_DIR}/optimizer/OptimizerTest.cpp)
-    asm_add_test_executable(asm_tool_tests      ${ASM_TEST_DIR}/tooling/ToolingTest.cpp)
-    asm_add_test_executable(asm_types_tests     ${ASM_TEST_DIR}/core/TypesTest.cpp)
+    asm_add_test_executable(asm_parse_tests     ${ASM_TEST_DIR}/parse/LexerTest.cpp)
+    asm_add_test_executable(asm_parser_tests    ${ASM_TEST_DIR}/parse/ParserTest.cpp)
+    asm_add_test_executable(asm_sim_tests       ${ASM_TEST_DIR}/sim/SimulatorTest.cpp)
+    asm_add_test_executable(asm_opt_tests       ${ASM_TEST_DIR}/transforms/OptimizerTest.cpp)
+    asm_add_test_executable(asm_analysis_tests  ${ASM_TEST_DIR}/analysis/ToolingTest.cpp)
 
     # Aggregate binary: all test sources compiled together.
     add_executable(asm_all_tests
-        ${ASM_TEST_DIR}/core/DiagnosticTest.cpp
-        ${ASM_TEST_DIR}/api/ProgramApiTest.cpp
-        ${ASM_TEST_DIR}/api/ConditionTest.cpp
-        ${ASM_TEST_DIR}/api/ExprStmtTest.cpp
+        ${ASM_TEST_DIR}/support/DiagnosticTest.cpp
+        ${ASM_TEST_DIR}/support/TypesTest.cpp
+        ${ASM_TEST_DIR}/dsl/ProgramApiTest.cpp
+        ${ASM_TEST_DIR}/dsl/ConditionTest.cpp
+        ${ASM_TEST_DIR}/dsl/ExprStmtTest.cpp
         ${ASM_TEST_DIR}/ir/IRTest.cpp
-        ${ASM_TEST_DIR}/parser/LexerTest.cpp
-        ${ASM_TEST_DIR}/parser/ParserTest.cpp
-        ${ASM_TEST_DIR}/simulator/SimulatorTest.cpp
-        ${ASM_TEST_DIR}/optimizer/OptimizerTest.cpp
-        ${ASM_TEST_DIR}/tooling/ToolingTest.cpp
-        ${ASM_TEST_DIR}/core/TypesTest.cpp
+        ${ASM_TEST_DIR}/parse/LexerTest.cpp
+        ${ASM_TEST_DIR}/parse/ParserTest.cpp
+        ${ASM_TEST_DIR}/sim/SimulatorTest.cpp
+        ${ASM_TEST_DIR}/transforms/OptimizerTest.cpp
+        ${ASM_TEST_DIR}/analysis/ToolingTest.cpp
     )
     target_link_libraries(asm_all_tests PRIVATE asm::studio GTest::gtest_main)
     target_compile_features(asm_all_tests PRIVATE cxx_std_${ASM_CXX_STANDARD})

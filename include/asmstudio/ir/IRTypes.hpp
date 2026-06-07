@@ -2,7 +2,7 @@
 #define ASMSTUDIO_IR_IRTYPES_HPP
 
 
-#include <asmstudio/core/Types.hpp>
+#include <asmstudio/support/Types.hpp>
 
 #include <functional>
 #include <optional>

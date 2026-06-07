@@ -1,9 +1,9 @@
-#include <asmstudio/api/Expr.hpp>
-#include <asmstudio/api/Function.hpp>
-#include <asmstudio/api/Program.hpp>
-#include <asmstudio/core/Diagnostic.hpp>
+#include <asmstudio/dsl/Expr.hpp>
+#include <asmstudio/dsl/Function.hpp>
+#include <asmstudio/dsl/Program.hpp>
+#include <asmstudio/support/Diagnostic.hpp>
 #include <asmstudio/ir/IRTypes.hpp>
-#include <asmstudio/lowering/Lowering.hpp>
+#include <asmstudio/ir/Lowering.hpp>
 
 #include <gtest/gtest.h>
 
