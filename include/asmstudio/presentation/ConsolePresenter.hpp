@@ -10,6 +10,7 @@
 #include <iosfwd>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace asmstudio
 {
@@ -20,7 +21,7 @@ public:
 
     void printOptimizeRequiresBuild() const;
     void printNotBuilt(std::string_view tag, std::string_view nextStep) const;
-    void printOptimizerSummary(std::size_t passCount, bool changed) const;
+    void printOptimizerSummary(std::size_t passCount, bool changed, const std::vector<std::string_view>& firedPasses) const;
     void printIR(std::string_view programName, const IRModule& module) const;
     void printAssembly(std::string_view programName, std::string_view assembly) const;
     void printControlFlow(std::string_view programName, std::string_view dot) const;

@@ -53,8 +53,16 @@ public:
         return m_passes.size();
     }
 
+    [[nodiscard]] const std::vector<std::string_view>& lastFiredPasses() const noexcept
+    {
+        return m_lastFiredPasses;
+    }
+
 private:
+    [[nodiscard]] bool runFixpoint(IRFunction& function, std::vector<std::string_view>* fired) const;
+
     std::vector<PassEntry> m_passes;
+    mutable std::vector<std::string_view> m_lastFiredPasses;
 };
 
 struct ConstantFolding

@@ -7,12 +7,14 @@
 #include <asmstudio/api/Variable.hpp>
 #include <asmstudio/core/Compat.hpp>
 
+#include <algorithm>
 #include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace asmstudio
 {
@@ -21,7 +23,7 @@ namespace
 class LoweringContext
 {
 public:
-    using VariableTable = std::unordered_map<std::string_view, ValueId>;
+    using VariableTable = std::unordered_map<std::string, ValueId>;
 
     explicit LoweringContext(IRFunction& function, std::size_t variableCount, DiagnosticBag& /*diagnostics*/)
     : m_function{ function }
@@ -39,13 +41,20 @@ public:
     [[nodiscard]] BlockId allocBlock(std::string name)
     {
         const BlockId id{ m_nextBlock++ };
+        const std::size_t index{ m_function.blocks.size() };
         m_function.blocks.push_back(IRBlock{ std::move(name), id, {} });
+        m_blockIndex.emplace(id.value, index);
         return id;
     }
 
-    [[nodiscard]] IRBlock& blockAt(const BlockId id) noexcept
+    [[nodiscard]] IRBlock& blockAt(const BlockId id)
     {
-        return m_function.blocks[id.value];
+        const auto it{ m_blockIndex.find(id.value) };
+        if (it == m_blockIndex.end() || it->second >= m_function.blocks.size())
+        {
+            throw std::logic_error("LoweringContext::blockAt: unknown block id");
+        }
+        return m_function.blocks[it->second];
     }
 
     [[nodiscard]] IRValue& valueAt(const ValueId id) noexcept
@@ -55,17 +64,17 @@ public:
 
     void emit(const BlockId blockId, IRInstr instruction)
     {
-        m_function.blocks[blockId.value].instrs.push_back(std::move(instruction));
+        blockAt(blockId).instrs.push_back(std::move(instruction));
     }
 
     void setVariable(std::string_view name, ValueId id)
     {
-        m_variableTable.insert_or_assign(name, id);
+        m_variableTable.insert_or_assign(std::string{ name }, id);
     }
 
     [[nodiscard]] std::optional<ValueId> lookupVariable(std::string_view name) const
     {
-        const auto it = m_variableTable.find(name);
+        const auto it{ m_variableTable.find(std::string{ name }) };
         if (it != m_variableTable.end())
         {
             return it->second;
@@ -89,6 +98,7 @@ private:
     std::uint32_t m_loopCount{ 0 };
     std::uint32_t m_ifCount{ 0 };
     VariableTable m_variableTable;
+    std::unordered_map<std::uint32_t, std::size_t> m_blockIndex; // blockId.value → index in blocks vector
 };
 
 [[nodiscard]] IROp binOpToIROp(BinOp operation) noexcept
@@ -402,6 +412,20 @@ BlockId lowerStatements(LoweringContext& context, BlockId currentBlock, compat::
     return currentBlock;
 }
 
+[[nodiscard]] std::unordered_set<std::string> immediatelyAssignedVariables(compat::Span<const Stmt> statements)
+{
+    std::unordered_set<std::string> result{};
+    for (const auto& stmt : statements)
+    {
+        if (!std::holds_alternative<AssignStmt>(stmt.variant()))
+        {
+            break;
+        }
+        result.insert(std::string{ std::get<AssignStmt>(stmt.variant()).target.get().name() });
+    }
+    return result;
+}
+
 [[nodiscard]] IRFunction lowerFunction(const Function& function, DiagnosticBag& diagnostics)
 {
     IRFunction irFunction{};
@@ -411,37 +435,51 @@ BlockId lowerStatements(LoweringContext& context, BlockId currentBlock, compat::
 
     LoweringContext context{ irFunction, function.variables().size(), diagnostics };
 
-    // Emit two values per variable:
-    //   1. An immutable Const — ConstFolding may propagate this.
-    //   2. A mutable canonical slot (Copy of the init) with no constant field.
-    //      Optimizer does not constant-fold canonical slots so mutations take effect.
     const BlockId entryBlock{ context.allocBlock("entry") };
     context.blockAt(entryBlock).instrs.reserve((function.variables().size() * 2U) + function.statements().size());
+
+    const auto immediatelyAssigned{ immediatelyAssignedVariables(function.statements()) };
 
     for (const auto& variable : function.variables())
     {
         const IRConstant initialConstant{ std::visit([](auto value) -> IRConstant { return value; }, variable->initVariant()) };
+        const bool skipInitCopy{ immediatelyAssigned.count(std::string{ variable->name() }) > 0 };
 
-        const ValueId initConstantId{ context.allocValue(variable->type(), initialConstant) };
+        if (skipInitCopy)
+        {
+            // The first statement is an explicit assign, so the canonical slot will
+            // be written before it is read. Skip emitting the init Const + Copy pair;
+            // DCE would remove them anyway, but skipping avoids allocating the values.
+            const ValueId canonicalSlotId{ context.allocValue(variable->type(), std::nullopt) };
+            context.setVariable(variable->name(), canonicalSlotId);
+        }
+        else
+        {
+            // General case: emit an immutable Const (for ConstFolding propagation)
+            // and a mutable canonical slot Copy (so mutations are not folded away).
+            const ValueId initConstantId{ context.allocValue(variable->type(), initialConstant) };
 
-        IRInstr constInstruction{};
-        constInstruction.op = IROp::Const;
-        constInstruction.output = initConstantId;
-        constInstruction.constVal = initialConstant;
-        context.emit(entryBlock, std::move(constInstruction));
+            IRInstr constInstruction{};
+            constInstruction.op = IROp::Const;
+            constInstruction.output = initConstantId;
+            constInstruction.constVal = initialConstant;
+            context.emit(entryBlock, std::move(constInstruction));
 
-        const ValueId canonicalSlotId{ context.allocValue(variable->type(), std::nullopt) };
+            const ValueId canonicalSlotId{ context.allocValue(variable->type(), std::nullopt) };
 
-        IRInstr copyInstruction{};
-        copyInstruction.op = IROp::Copy;
-        copyInstruction.inputs = { initConstantId };
-        copyInstruction.output = canonicalSlotId;
-        context.emit(entryBlock, std::move(copyInstruction));
+            IRInstr copyInstruction{};
+            copyInstruction.op = IROp::Copy;
+            copyInstruction.inputs = { initConstantId };
+            copyInstruction.output = canonicalSlotId;
+            context.emit(entryBlock, std::move(copyInstruction));
 
-        context.setVariable(variable->name(), canonicalSlotId);
+            context.setVariable(variable->name(), canonicalSlotId);
+        }
     }
 
     lowerStatements(context, entryBlock, function.statements());
+
+    irFunction.rebuildBlockIndex();
     return irFunction;
 }
 } // namespace

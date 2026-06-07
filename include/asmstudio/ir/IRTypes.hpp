@@ -7,6 +7,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -137,6 +138,7 @@ struct IRFunction
     std::string name;
     std::vector<IRBlock> blocks;
     std::vector<IRValue> values; // indexed by ValueId::value
+    std::unordered_map<std::uint32_t, std::size_t> blockIndex; // blockId.value → index in blocks
 
     [[nodiscard]] const IRBlock* entryBlock() const noexcept
     {
@@ -150,6 +152,15 @@ struct IRFunction
 
     [[nodiscard]] const IRBlock* findBlock(BlockId blockId) const noexcept
     {
+        if (!blockIndex.empty())
+        {
+            const auto it{ blockIndex.find(blockId.value) };
+            if (it == blockIndex.end() || it->second >= blocks.size())
+            {
+                return nullptr;
+            }
+            return &blocks[it->second];
+        }
         for (const auto& block : blocks)
         {
             if (block.id == blockId)
@@ -162,6 +173,15 @@ struct IRFunction
 
     [[nodiscard]] IRBlock* findBlock(BlockId blockId) noexcept
     {
+        if (!blockIndex.empty())
+        {
+            const auto it{ blockIndex.find(blockId.value) };
+            if (it == blockIndex.end() || it->second >= blocks.size())
+            {
+                return nullptr;
+            }
+            return &blocks[it->second];
+        }
         for (auto& block : blocks)
         {
             if (block.id == blockId)
@@ -170,6 +190,16 @@ struct IRFunction
             }
         }
         return nullptr;
+    }
+
+    void rebuildBlockIndex()
+    {
+        blockIndex.clear();
+        blockIndex.reserve(blocks.size());
+        for (std::size_t i{ 0 }; i < blocks.size(); ++i)
+        {
+            blockIndex.emplace(blocks[i].id.value, i);
+        }
     }
 };
 

@@ -142,7 +142,7 @@ TEST(IR, MutableHelpersAndHashesWorkWithIrContainers)
     // Given
     IRModule module{};
     module.name = "manual";
-    module.functions.push_back(IRFunction{ "main", { IRBlock{ "entry", BlockId{ 0 }, {} } }, {} });
+    module.functions.push_back(IRFunction{ "main", { IRBlock{ "entry", BlockId{ 0 }, {} } }, {}, {} });
 
     // When
     IRFunction* function = module.findFunction("main");

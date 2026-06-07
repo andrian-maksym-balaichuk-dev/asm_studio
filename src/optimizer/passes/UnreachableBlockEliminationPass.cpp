@@ -22,17 +22,18 @@ namespace
         const BlockId currentBlockId{ worklist.back() };
         worklist.pop_back();
 
-        if (currentBlockId.value >= function.blocks.size()) { continue; }
+        const IRBlock* currentBlock{ function.findBlock(currentBlockId) };
+        if (!currentBlock) { continue; }
 
-        for (const auto& instruction : function.blocks[currentBlockId.value].instrs)
+        auto enqueueBlock = [&](BlockId targetBlockId) {
+            if (reachableBlockIds.insert(targetBlockId.value).second)
+            {
+                worklist.push_back(targetBlockId);
+            }
+        };
+
+        for (const auto& instruction : currentBlock->instrs)
         {
-            auto enqueueBlock = [&](BlockId targetBlockId) {
-                if (reachableBlockIds.insert(targetBlockId.value).second)
-                {
-                    worklist.push_back(targetBlockId);
-                }
-            };
-
             if (instruction.trueTarget)  { enqueueBlock(*instruction.trueTarget); }
             if (instruction.falseTarget) { enqueueBlock(*instruction.falseTarget); }
         }
@@ -56,6 +57,11 @@ namespace
             return reachableBlockIds.find(block.id.value) == reachableBlockIds.end();
         });
 
-    return function.blocks.size() != previousBlockCount;
+    const bool changed{ function.blocks.size() != previousBlockCount };
+    if (changed)
+    {
+        function.rebuildBlockIndex();
+    }
+    return changed;
 }
 } // namespace asmstudio

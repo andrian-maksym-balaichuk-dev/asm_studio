@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 namespace asmstudio
 {
@@ -103,9 +104,13 @@ void ConsolePresenter::printNotBuilt(std::string_view tag, std::string_view next
     writeLine(m_output.get(), "[{}] Not built — {}.", tag, nextStep);
 }
 
-void ConsolePresenter::printOptimizerSummary(std::size_t passCount, bool changed) const
+void ConsolePresenter::printOptimizerSummary(std::size_t passCount, bool changed, const std::vector<std::string_view>& firedPasses) const
 {
-    writeLine(m_output.get(), "[OPT] {} passes ran, IR {}.", passCount, changed ? "was modified" : "unchanged");
+    writeLine(m_output.get(), "[OPT] {} passes registered, IR {}.", passCount, changed ? "was modified" : "unchanged");
+    for (const auto name : firedPasses)
+    {
+        writeLine(m_output.get(), "  [fired] {}", name);
+    }
 }
 
 void ConsolePresenter::printIR(std::string_view programName, const IRModule& module) const

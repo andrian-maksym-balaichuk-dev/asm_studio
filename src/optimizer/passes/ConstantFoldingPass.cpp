@@ -75,6 +75,33 @@ foldBinaryInt(IROp opcode, int64_t leftValue, int64_t rightValue, std::optional<
     default: return std::nullopt;
     }
 }
+
+[[nodiscard]] std::optional<IRConstant> foldUnary(IROp opcode, const IRConstant& operand) noexcept
+{
+    switch (opcode)
+    {
+    case IROp::Neg:
+        return std::visit(
+            compat::Overloaded{
+                [](int64_t v) noexcept -> IRConstant { return -v; },
+                [](uint64_t v) noexcept -> IRConstant { return static_cast<uint64_t>(-static_cast<int64_t>(v)); },
+                [](double v) noexcept -> IRConstant { return -v; },
+                [](bool v) noexcept -> IRConstant { return !v; },
+            },
+            operand);
+    case IROp::Not:
+        return std::visit(
+            compat::Overloaded{
+                [](int64_t v) noexcept -> IRConstant { return ~v; },
+                [](uint64_t v) noexcept -> IRConstant { return ~v; },
+                [](double) noexcept -> IRConstant { return double{ 0 }; },
+                [](bool v) noexcept -> IRConstant { return !v; },
+            },
+            operand);
+    default:
+        return std::nullopt;
+    }
+}
 } // namespace
 
 [[nodiscard]] bool ConstantFolding::run(IRFunction& function) const
@@ -116,6 +143,20 @@ foldBinaryInt(IROp opcode, int64_t leftValue, int64_t rightValue, std::optional<
                         instruction.inputs.clear();
                         changed = true;
                     }
+                }
+            }
+            else if (instruction.inputs.size() == 1)
+            {
+                const IRConstant& operand{ *function.values[instruction.inputs[0].value].constant };
+                const auto foldedConstant{ foldUnary(instruction.op, operand) };
+
+                if (foldedConstant)
+                {
+                    function.values[instruction.output->value].constant = foldedConstant;
+                    instruction.op = IROp::Const;
+                    instruction.constVal = foldedConstant;
+                    instruction.inputs.clear();
+                    changed = true;
                 }
             }
         }

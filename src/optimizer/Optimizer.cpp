@@ -1,8 +1,10 @@
 #include <asmstudio/optimizer/Optimizer.hpp>
 
+#include <algorithm>
+
 namespace asmstudio
 {
-[[nodiscard]] bool Optimizer::run(IRFunction& function) const
+[[nodiscard]] bool Optimizer::runFixpoint(IRFunction& function, std::vector<std::string_view>* fired) const
 {
     bool anyChanged{ false };
     bool changed{ true };
@@ -10,25 +12,38 @@ namespace asmstudio
     while (changed)
     {
         changed = false;
-        for (const auto& [passName, runPass] : m_passes)
+        for (const auto& pass : m_passes)
         {
-            (void)passName;
-            if (runPass(function))
+            if (pass.run(function))
             {
                 changed = true;
                 anyChanged = true;
+                if (fired)
+                {
+                    const std::string_view name{ pass.name };
+                    if (std::find(fired->begin(), fired->end(), name) == fired->end())
+                    {
+                        fired->push_back(name);
+                    }
+                }
             }
         }
     }
     return anyChanged;
 }
 
+[[nodiscard]] bool Optimizer::run(IRFunction& function) const
+{
+    return runFixpoint(function, nullptr);
+}
+
 [[nodiscard]] bool Optimizer::run(IRModule& module) const
 {
+    m_lastFiredPasses.clear();
     bool changed{ false };
     for (auto& function : module.functions)
     {
-        if (run(function))
+        if (runFixpoint(function, &m_lastFiredPasses))
         {
             changed = true;
         }

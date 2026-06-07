@@ -69,7 +69,7 @@ void Program::optimize(OptimizationLevel level)
 
     Optimizer optimizer{ makeOptimizer(level) };
     const bool changed{ optimizer.run(*m_irModule) };
-    presenter.printOptimizerSummary(optimizer.passCount(), changed);
+    presenter.printOptimizerSummary(optimizer.passCount(), changed, optimizer.lastFiredPasses());
 }
 
 void Program::showIR() const
